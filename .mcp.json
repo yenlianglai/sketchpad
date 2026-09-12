@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sketch": {
+      "command": "node",
+      "args": ["./server/channel.mjs"],
+      "env": { "SKETCH_PORT": "8790" }
+    }
+  }
+}

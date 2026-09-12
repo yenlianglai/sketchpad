@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sketch-standalone",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/channel.mjs", "--standalone"],
+      "port": 8790
+    }
+  ]
+}

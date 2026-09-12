@@ -1,0 +1,20 @@
+{
+  "name": "sketchpad",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "iPad sketch + voice channel that pushes turns into a running Claude Code session",
+  "scripts": {
+    "server": "node server/channel.mjs",
+    "test:mcp": "node scripts/test-mcp-client.mjs",
+    "cert": "sh scripts/gen-cert.sh"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "ws": "^8.18.0",
+    "zod": "^4.6.2"
+  }
+}
