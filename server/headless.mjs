@@ -13,6 +13,9 @@ export function createHeadlessDriver({ cwd, instructions, onEvent, log, resume, 
     '--output-format', 'stream-json',
     '--verbose',
     ...(permissionMode ? ['--permission-mode', permissionMode] : []),
+    // Ignore the project's .mcp.json: otherwise Claude spawns a second copy of this server
+    // (channel driver) and tries to call its `reply` tool, which nobody can approve here.
+    '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
     '--append-system-prompt', instructions,
     ...(resume ? ['--resume', resume] : []),
     ...extraArgs

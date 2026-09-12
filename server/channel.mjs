@@ -120,7 +120,8 @@ function deliverTurn({ turnId, text, pngPath, pngBase64, strokes, durationMs }) 
 // Headless driver: forward Claude's stream events to the iPad as replies / status lines.
 function startHeadless() {
   headless = createHeadlessDriver({
-    cwd: WORK_DIR, instructions: INSTRUCTIONS, log,
+    cwd: WORK_DIR, log,
+    instructions: INSTRUCTIONS + '\nYour plain text output is forwarded to the iPad as-is; there is no reply tool. Do not search for one.',
     resume: process.env.SKETCH_RESUME,
     permissionMode: process.env.SKETCH_PERMISSION_MODE,
     onEvent: ev => {
