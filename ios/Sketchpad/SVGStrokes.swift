@@ -25,12 +25,15 @@ struct SVGStrokeMapping {
 }
 
 enum SVGStrokes {
-    static func strokes(from svg: String, mapping: SVGStrokeMapping, defaultColor: UIColor) -> [PKStroke] {
+    /// Each returned stroke gets a distinct `creationDate` (baseDate + index ms) so it can be identified later (provenance).
+    static func strokes(from svg: String, mapping: SVGStrokeMapping, defaultColor: UIColor, baseDate: Date = Date()) -> [PKStroke] {
         let parser = Parser(svg: svg)
         var mapping = mapping
         if let vb = parser.viewBox { mapping.viewBox = vb }
-        let now = Date()
+        var index = 0
         return parser.shapes.compactMap { shape in
+            defer { index += 1 }
+            let now = baseDate.addingTimeInterval(Double(index) * 0.001)
             let pts = shape.points.map(mapping.canvasPoint)
             guard pts.count >= 2 else { return nil }
             let widthPx = shape.strokeWidth ?? 3

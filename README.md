@@ -87,11 +87,11 @@ npm run test:mcp
 `ios/` 是 SwiftUI + PencilKit 的 iPad app，取代網頁版：沒有語音、沒有憑證、Bonjour 自動找到 Mac。
 
 - 系統 PencilKit 工具列：筆、鉛筆、螢光筆、橡皮、套索、尺、色盤；Pencil 壓感與傾斜；雙指縮放的大畫布。
-- 多頁畫板，自動存檔。
-- 送出時把**上次已送過的筆跡淡成灰色、新筆跡保留原色**，agent 一眼看出新增的部分（可關）。
-- 回合切分三選一：按送出、Pencil 雙擊、停筆 N 秒自動送出。
-- 底部文字欄支援 Scribble：用 Pencil 寫字直接變成註解文字一起送。
-- 右側面板顯示 agent 回覆（文字、SVG、圖），可朗讀。
+- **回合是一等公民**：每次送出都存下完整筆跡與圖層，右側 Turns 分頁可回看、分支成新頁、匯出、移除 agent 該回合的筆跡。
+- agent 回的手繪 SVG 變成**可編輯筆跡**（貼在你送出那張圖的座標上，逐筆畫出，帶來源標記）；mermaid / draw.io / 生成圖變成**圖層**（PNG/SVG 渲染圖，放在筆跡下方，可移動縮放鎖定）。
+- 多頁畫板（Pages 分頁）：縮圖牆、改名、複製、刪除、agent 可用 `sketchpad_set_title` 建議標題。Media 分頁列出這頁所有的圖，可分享或放成圖層。
+- 送出時**上次已送過的筆跡淡成灰色、新筆跡保留原色**（可關）。回合切分三選一：按送出、Pencil 雙擊、停筆 N 秒自動送出。
+- 畫圖時 UI 全部淡出、右軌滑出螢幕，抬筆一秒回來。紙張可選空白／點陣／格線。
 
 需求：Xcode 26、iPadOS 17+。專案用 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 產生：
 
@@ -120,10 +120,15 @@ server 同時是一個**標準 MCP server**（Streamable HTTP，`http://localhos
 
 | tool | 作用 |
 | --- | --- |
-| `sketchpad_wait_for_turn` | 阻塞直到使用者說完一段話（或按送出），回傳逐字稿 + 草圖 PNG image block |
-| `sketchpad_get_canvas` | 不等語音，立刻抓一張目前畫布 |
-| `sketchpad_show` | 在 iPad 顯示一句話（會朗讀），可附 SVG 畫回去 |
-| `sketchpad_status` | iPad 是否連著、排隊回合數 |
+| `sketchpad_wait_for_turn` | 阻塞直到使用者送出一回合，回傳手寫註記 + 頁面 PNG image block（灰 = 已看過的筆跡，深 = 新筆跡） |
+| `sketchpad_get_canvas` | 不等回合，立刻抓一張目前畫布 |
+| `sketchpad_show` | 回覆。`svg` → 轉成可編輯筆跡貼在該回合圖片的座標上；`image_path`（mermaid / draw.io / 生成圖的 png/svg）→ iPad 面板顯示，`place_as_layer` 直接放到畫布當可移動圖層 |
+| `sketchpad_list_turns` | 這一頁（或全部）的回合清單，含每回合的回覆摘要 |
+| `sketchpad_get_turn` | 拿回某一回合的註記與當時的圖 |
+| `sketchpad_set_title` | 幫目前頁面命名（使用者改過名之後不再套用） |
+| `sketchpad_status` | iPad 是否連線、目前頁面、排隊回合數 |
+
+server 端在 `inbox/turns.json` 保留每回合的紀錄（頁面、時間、圖檔、回覆）。
 
 啟動 server（任何 driver 都有 MCP endpoint；純手寫板用法選 `none`）：
 

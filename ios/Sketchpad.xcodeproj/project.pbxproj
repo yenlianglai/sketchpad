@@ -8,11 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		014CFF24BCFBA3637A3CF605 /* SketchpadApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43E4564781061F22876585D /* SketchpadApp.swift */; };
+		09240145A13A299278D6D530 /* DrawerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE399589066DF03F9B44CBC3 /* DrawerViews.swift */; };
 		1985DD87C3393755EB3DDFF7 /* BoardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD656CBA4190A5C2B4F7BDC /* BoardStore.swift */; };
+		3367A50B00011648EBE2EF91 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0C86C586FA2411F65CCBCE7 /* Models.swift */; };
 		52623790AF8980281682BF31 /* ServerConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174F5814B810E56DBB486170 /* ServerConnection.swift */; };
 		5344DA013F11F6A0BF374138 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39EF633D5F393E123E6361C1 /* Settings.swift */; };
 		79AC6DE959935BB91DF11E79 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DA319B7A0ABEA2F42EEF6E4 /* ContentView.swift */; };
+		7F84624131C533373F710CD2 /* LayerHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514EFB18FF2E83CD66251213 /* LayerHostView.swift */; };
 		928B7AA06CE142B39FA641B5 /* SVGStrokes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401EDFB6C9F9DBEC6CAB4882 /* SVGStrokes.swift */; };
+		E2C3A299941BD2C557137CD5 /* LayerOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */; };
 		E53CC37A4E56B79482D7DF06 /* CanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF9CA4D0417B10AB050A75C /* CanvasView.swift */; };
 		F46F312ACC0231AE1B90D727 /* TurnRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF502298A2C010FE66163AF /* TurnRenderer.swift */; };
 /* End PBXBuildFile section */
@@ -25,9 +29,13 @@
 		3BF502298A2C010FE66163AF /* TurnRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnRenderer.swift; sourceTree = "<group>"; };
 		401EDFB6C9F9DBEC6CAB4882 /* SVGStrokes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGStrokes.swift; sourceTree = "<group>"; };
 		4CD656CBA4190A5C2B4F7BDC /* BoardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardStore.swift; sourceTree = "<group>"; };
+		514EFB18FF2E83CD66251213 /* LayerHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerHostView.swift; sourceTree = "<group>"; };
 		74A1C02BC436487CB30DCB62 /* Sketchpad.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Sketchpad.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8AF9CA4D0417B10AB050A75C /* CanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasView.swift; sourceTree = "<group>"; };
+		ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerOverlay.swift; sourceTree = "<group>"; };
+		BE399589066DF03F9B44CBC3 /* DrawerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerViews.swift; sourceTree = "<group>"; };
 		C43E4564781061F22876585D /* SketchpadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SketchpadApp.swift; sourceTree = "<group>"; };
+		F0C86C586FA2411F65CCBCE7 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -45,7 +53,11 @@
 				4CD656CBA4190A5C2B4F7BDC /* BoardStore.swift */,
 				8AF9CA4D0417B10AB050A75C /* CanvasView.swift */,
 				1DA319B7A0ABEA2F42EEF6E4 /* ContentView.swift */,
+				BE399589066DF03F9B44CBC3 /* DrawerViews.swift */,
 				04AF8DE57C88945B96C97F14 /* Info.plist */,
+				514EFB18FF2E83CD66251213 /* LayerHostView.swift */,
+				ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */,
+				F0C86C586FA2411F65CCBCE7 /* Models.swift */,
 				174F5814B810E56DBB486170 /* ServerConnection.swift */,
 				39EF633D5F393E123E6361C1 /* Settings.swift */,
 				C43E4564781061F22876585D /* SketchpadApp.swift */,
@@ -125,6 +137,10 @@
 				1985DD87C3393755EB3DDFF7 /* BoardStore.swift in Sources */,
 				E53CC37A4E56B79482D7DF06 /* CanvasView.swift in Sources */,
 				79AC6DE959935BB91DF11E79 /* ContentView.swift in Sources */,
+				09240145A13A299278D6D530 /* DrawerViews.swift in Sources */,
+				7F84624131C533373F710CD2 /* LayerHostView.swift in Sources */,
+				E2C3A299941BD2C557137CD5 /* LayerOverlay.swift in Sources */,
+				3367A50B00011648EBE2EF91 /* Models.swift in Sources */,
 				928B7AA06CE142B39FA641B5 /* SVGStrokes.swift in Sources */,
 				52623790AF8980281682BF31 /* ServerConnection.swift in Sources */,
 				5344DA013F11F6A0BF374138 /* Settings.swift in Sources */,

@@ -165,7 +165,7 @@ function authorized(url) { return !TOKEN || url.searchParams.get('token') === TO
 
 // Sketchpad-as-MCP: shared turn queue + tool set, served over Streamable HTTP at /mcp (stateless,
 // one transport per request) so any agent — Claude Code, ADK, Codex — can pull turns.
-const sketchpad = createSketchpad({ log, broadcast, clientCount: () => sockets.size })
+const sketchpad = createSketchpad({ log, broadcast, clientCount: () => sockets.size, inboxDir: INBOX_DIR, outboxDir: OUTBOX_DIR })
 async function handleMcp(req, res) {
   let body
   if (req.method === 'POST') {
@@ -208,7 +208,7 @@ async function handle(req, res) {
         writeFileSync(pngPath, Buffer.from(b64, 'base64'))
       }
       // Always queue for MCP pullers; the push drivers (channel/headless) are additive.
-      sketchpad.pushTurn({ turnId, text: body.text, pngPath, pngBase64: b64, strokes: body.strokes, durationMs: body.durationMs, ts: Date.now() })
+      sketchpad.pushTurn({ turnId, text: body.text, pngPath, pngBase64: b64, strokes: body.strokes, boardId: body.boardId, boardTitle: body.boardTitle, ts: Date.now() })
       const delivered = DRIVER === 'none' ? true : deliverTurn({ turnId, text: body.text, pngPath, pngBase64: b64, strokes: body.strokes, durationMs: body.durationMs })
       log(`turn ${turnId}: "${(body.text || '').slice(0, 60)}" png=${pngPath ? basename(pngPath) : '-'} delivered=${delivered}`)
       broadcast({ type: 'turn', turnId, text: body.text, pngPath, delivered, ts: Date.now() })

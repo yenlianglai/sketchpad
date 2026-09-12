@@ -1,9 +1,5 @@
 import SwiftUI
 import PencilKit
-import WebKit
-
-/// Where a sent image sits on the canvas, so agent SVG drawn in that image's pixel space lands in place.
-struct TurnMapping { let bounds: CGRect; let scale: CGFloat; let imageSize: CGSize }
 
 struct ContentView: View {
     @EnvironmentObject var settings: Settings
@@ -12,102 +8,179 @@ struct ContentView: View {
     @StateObject private var canvasController = CanvasController()
 
     @State private var drawing = PKDrawing()
-    @State private var caption = ""
-    @State private var showPanel = true
+    @State private var loadedBoardID: UUID?
+    @State private var showDrawer = false
+    @State private var tab: DrawerTab = .turns
+    @State private var unread = 0
     @State private var showSettings = false
-    @State private var showPages = false
+    @State private var previewTurn: Turn?
+    @State private var selectedLayerID: UUID?
     @State private var sending = false
     @State private var flash: String?
     @State private var autoSendTask: Task<Void, Never>?
-    @State private var loadedBoardID: UUID?
-    @State private var turnMappings: [String: TurnMapping] = [:]
-    @State private var lastTurnId: String?
+
+    private let railWidth: CGFloat = 48
+    private let drawerWidth: CGFloat = 356
 
     private var newStrokeCount: Int { max(0, drawing.strokes.count - store.current.sentStrokeCount) }
+    private var chromeHidden: Bool { settings.autoHideChrome && canvasController.isDrawing }
+    private var rightInset: CGFloat { railWidth + (showDrawer ? drawerWidth : 0) }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                CanvasView(drawing: $drawing, controller: canvasController, pencilOnly: settings.pencilOnly,
-                           onStrokesChanged: strokesChanged,
-                           onPencilDoubleTap: settings.pencilDoubleTapSends ? { Task { await send() } } : nil)
-                    .ignoresSafeArea()
-                topBar
-                VStack { Spacer(); bottomBar }
-                if let flash {
-                    Text(flash).font(.callout.weight(.medium)).padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(.thinMaterial, in: Capsule()).frame(maxWidth: .infinity).padding(.top, 60)
-                        .transition(.opacity)
+        ZStack(alignment: .topLeading) {
+            CanvasView(drawing: $drawing, controller: canvasController, pencilOnly: settings.pencilOnly, paper: settings.paper,
+                       layers: store.current.layers, layerImage: { store.image(named: $0.file, in: store.layersDir) },
+                       onStrokesChanged: strokesChanged,
+                       onPencilDoubleTap: settings.pencilDoubleTapSends ? { Task { await send() } } : nil)
+                .ignoresSafeArea()
+
+            if let id = selectedLayerID, let layer = store.current.layers.first(where: { $0.id == id }) {
+                LayerOverlay(layer: layer, controller: canvasController,
+                             onChange: { store.updateLayer($0) },
+                             onDelete: { store.removeLayer(id); selectedLayerID = nil },
+                             onDone: { selectedLayerID = nil })
+                    .padding(.trailing, rightInset)
+            }
+
+            topBar.opacity(chromeHidden ? 0 : 1)
+            sendButton.opacity(chromeHidden ? 0 : 1)
+            if let flash { toast(flash) }
+
+            // Right side: drawer + rail slide off-screen while drawing; a handle stays.
+            HStack(spacing: 0) {
+                if showDrawer {
+                    Drawer(tab: $tab, actions: drawerActions).frame(width: drawerWidth).transition(.move(edge: .trailing))
                 }
+                rail
             }
-            if showPanel {
-                Divider()
-                SidePanel(items: conn.items, onPlace: { placeAgentDrawing($0, announce: true) }).frame(width: 340)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .offset(x: chromeHidden ? rightInset : 0)
+
+            if chromeHidden {
+                Button { canvasController.isDrawing = false } label: {
+                    RoundedRectangle(cornerRadius: 2).fill(Color(white: 0.78)).frame(width: 3, height: 22)
+                        .frame(width: 14, height: 56).background(.thinMaterial, in: UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10))
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             }
         }
-        .onAppear(perform: loadCurrentBoard)
-        .onChange(of: store.currentID) { _, _ in loadCurrentBoard() }
-        .onAppear {
-            conn.snapshotProvider = { TurnRenderer.render(drawing, sentStrokeCount: 0, highlightNew: false)?.png }
-            conn.onReply = { item in if settings.autoPlaceAgentDrawing, item.svg != nil { placeAgentDrawing(item, announce: true) } }
-        }
-        .sheet(isPresented: $showSettings) { SettingsView().environmentObject(settings).environmentObject(conn) }
-        .sheet(isPresented: $showPages) { PagesView().environmentObject(store) }
+        .animation(.easeInOut(duration: 0.22), value: chromeHidden)
+        .animation(.easeInOut(duration: 0.22), value: showDrawer)
         .animation(.easeInOut(duration: 0.2), value: flash)
+        .onAppear { loadCurrentBoard(); wireEvents() }
+        .onChange(of: store.currentID) { _, _ in selectedLayerID = nil; loadCurrentBoard() }
+        .onChange(of: canvasController.isDrawing) { _, drawing in canvasController.setToolPickerVisible(!(drawing && settings.autoHideChrome)) }
+        .sheet(isPresented: $showSettings) { SettingsView().environmentObject(settings).environmentObject(conn) }
+        .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }
     }
 
-    // MARK: bars
+    // MARK: chrome
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Button { showPages = true } label: {
-                Label(store.current.title, systemImage: "doc.on.doc").labelStyle(.titleAndIcon).lineLimit(1).fixedSize()
-            }
-            Button { canvasController.undo() } label: { Image(systemName: "arrow.uturn.backward") }
-            Button { canvasController.redo() } label: { Image(systemName: "arrow.uturn.forward") }
-            Button(role: .destructive) { store.clearCurrent(); drawing = PKDrawing() } label: { Image(systemName: "trash") }
-            Spacer()
-            statusChip
-            Button { showSettings = true } label: { Image(systemName: "gearshape") }
-            Button { withAnimation { showPanel.toggle() } } label: { Image(systemName: showPanel ? "sidebar.trailing" : "sidebar.leading") }
-        }
-        .buttonStyle(.bordered).controlSize(.regular)
-        .padding(.horizontal, 12).padding(.top, 8)
-    }
-
-    private var statusChip: some View {
-        HStack(spacing: 6) {
-            Circle().fill(conn.status == .connected ? Color.green : conn.status == .connecting ? .orange : .red).frame(width: 9, height: 9)
-            Text(conn.status == .connected ? (conn.agentReady ? "agent 已連線" : "server 已連線") : conn.status == .connecting ? "連線中…" : "未連線")
-                .font(.footnote).foregroundStyle(.secondary).lineLimit(1).fixedSize()
-        }
-        .padding(.horizontal, 10).padding(.vertical, 6).background(.thinMaterial, in: Capsule())
-    }
-
-    private var bottomBar: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            // Scribble turns Pencil handwriting in this field into text: a free caption channel.
-            TextField("用 Pencil 在這裡寫註解（可空白）", text: $caption)
-                .textFieldStyle(.plain).padding(.horizontal, 14).padding(.vertical, 10)
-                .background(.thinMaterial, in: Capsule()).frame(maxWidth: 460)
-                .submitLabel(.send).onSubmit { Task { await send() } }
-            Spacer()
-            Button { Task { await send() } } label: {
-                HStack(spacing: 8) {
-                    if sending { ProgressView().tint(.white) } else { Image(systemName: "paperplane.fill") }
-                    Text("送出")
-                    if newStrokeCount > 0 { Text("\(newStrokeCount)").font(.caption.bold()).padding(.horizontal, 7).padding(.vertical, 2).background(.white.opacity(0.25), in: Capsule()) }
+            Menu {
+                ForEach(store.boardsByRecency.prefix(8)) { b in Button(b.title) { store.currentID = b.id } }
+                Divider()
+                Button { store.newBoard() } label: { Label("New page", systemImage: "plus") }
+                Button { showDrawer = true; tab = .pages } label: { Label("All pages…", systemImage: "square.grid.2x2") }
+            } label: {
+                HStack(spacing: 10) {
+                    Circle().fill(conn.status == .connected ? (conn.agentReady ? Color.green : Color.orange) : Color.red).frame(width: 8, height: 8)
+                    Text(store.current.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(statusText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.secondary)
                 }
-                .font(.title3.weight(.semibold)).padding(.horizontal, 22).padding(.vertical, 14)
+                .padding(.horizontal, 16).frame(height: 44).background(.thinMaterial, in: Capsule())
             }
-            .buttonStyle(.borderedProminent).tint(.black).clipShape(Capsule())
-            .disabled(sending || (drawing.strokes.isEmpty && caption.isEmpty))
-            .keyboardShortcut(.return, modifiers: .command)
+            .buttonStyle(.plain)
+            chromeButton("arrow.uturn.backward") { canvasController.undo() }
+            chromeButton("arrow.uturn.forward") { canvasController.redo() }
         }
-        .padding(.horizontal, 16).padding(.bottom, 150) // clear of the floating PencilKit tool picker
+        .padding(.leading, 20).padding(.top, 20)
     }
 
-    // MARK: actions
+    private var statusText: String {
+        switch conn.status {
+        case .connected: return conn.agentReady ? "agent listening" : (sending ? "sending…" : "saved")
+        case .connecting: return "connecting…"
+        case .disconnected: return "offline"
+        }
+    }
+
+    private func chromeButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).font(.body.weight(.medium)).frame(width: 44, height: 44).background(.thinMaterial, in: Circle()) }
+            .buttonStyle(.plain).foregroundStyle(.primary)
+    }
+
+    private var rail: some View {
+        VStack(spacing: 14) {
+            railButton("sidebar.trailing", on: showDrawer && tab == .turns, badge: unread) { toggleDrawer(.turns) }
+            railButton("photo.on.rectangle", on: showDrawer && tab == .media) { toggleDrawer(.media) }
+            railButton("doc.on.doc", on: showDrawer && tab == .pages) { toggleDrawer(.pages) }
+            Spacer()
+            railButton("gearshape") { showSettings = true }
+        }
+        .padding(.top, 20).padding(.bottom, 20)
+        .frame(width: railWidth).frame(maxHeight: .infinity)
+        .background(.regularMaterial)
+        .overlay(alignment: .leading) { Divider() }
+    }
+
+    private func railButton(_ symbol: String, on: Bool = false, badge: Int = 0, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.body.weight(.medium))
+                .frame(width: 34, height: 34)
+                .background(on ? Color.primary : Color.clear, in: RoundedRectangle(cornerRadius: 11))
+                .foregroundStyle(on ? Color(uiColor: .systemBackground) : Color.secondary)
+                .overlay(alignment: .topTrailing) {
+                    if badge > 0 {
+                        Text("\(badge)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 4).frame(minWidth: 17, minHeight: 17)
+                            .background(Color(uiColor: Settings.agentColor), in: Capsule()).overlay(Capsule().stroke(.white, lineWidth: 2))
+                            .offset(x: 6, y: -6)
+                    }
+                }
+        }.buttonStyle(.plain)
+    }
+
+    private func toggleDrawer(_ t: DrawerTab) {
+        if showDrawer && tab == t { showDrawer = false } else { tab = t; showDrawer = true }
+        if t == .turns { unread = 0 }
+    }
+
+    private var sendButton: some View {
+        GeometryReader { geo in
+        VStack { Spacer()
+            HStack { Spacer()
+                Button { Task { await send() } } label: {
+                    HStack(spacing: 10) {
+                        if sending { ProgressView().tint(.white) } else { Image(systemName: "paperplane.fill") }
+                        Text("Send").font(.headline)
+                        if newStrokeCount > 0 {
+                            Text("\(newStrokeCount)").font(.caption.bold()).padding(.horizontal, 7).frame(minWidth: 24, minHeight: 24).background(.white.opacity(0.22), in: Capsule())
+                        }
+                    }
+                    .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 56)
+                    .background(Color.black, in: Capsule()).shadow(color: .black.opacity(0.22), radius: 12, y: 8)
+                }
+                .buttonStyle(.plain)
+                .disabled(sending || (drawing.strokes.isEmpty && store.current.layers.isEmpty))
+                // The floating PencilKit picker spans most of a narrow (portrait) width; keep Send above it there.
+                .padding(.trailing, rightInset + 24).padding(.bottom, geo.size.width - rightInset < 1000 ? 130 : 28)
+            }
+        }
+        }
+    }
+
+    private func toast(_ s: String) -> some View {
+        VStack { Spacer()
+            Text(s).font(.callout.weight(.medium)).padding(.horizontal, 14).padding(.vertical, 9).background(.thinMaterial, in: Capsule())
+                .padding(.bottom, 110)
+        }.frame(maxWidth: .infinity).padding(.trailing, rightInset).transition(.opacity)
+    }
+
+    // MARK: board & strokes
 
     private func loadCurrentBoard() {
         guard loadedBoardID != store.currentID else { return }
@@ -118,7 +191,6 @@ struct ContentView: View {
     private func strokesChanged() {
         var b = store.current
         b.drawing = drawing
-        // Undo past the sent boundary: clamp so the diff stays meaningful.
         b.sentStrokeCount = min(b.sentStrokeCount, drawing.strokes.count)
         store.current = b
         scheduleAutoSend()
@@ -134,31 +206,32 @@ struct ContentView: View {
         }
     }
 
+    private func layerImage(_ l: Layer) -> UIImage? { store.image(named: l.file, in: store.layersDir) }
+
+    private func renderCurrent(highlight: Bool) -> TurnRenderer.Output? {
+        TurnRenderer.render(drawing, layers: store.current.layers, layerImage: layerImage, sentStrokeCount: store.current.sentStrokeCount, highlightNew: highlight)
+    }
+
+    // MARK: send
+
     @MainActor
     private func send() async {
         autoSendTask?.cancel()
         guard !sending else { return }
-        let text = caption.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rendered = TurnRenderer.render(drawing, sentStrokeCount: store.current.sentStrokeCount, highlightNew: settings.highlightNewStrokes)
-        guard rendered != nil || !text.isEmpty else { return }
+        guard let out = renderCurrent(highlight: settings.highlightNewStrokes) else { return }
         sending = true
         defer { sending = false }
+        let board = store.current
         do {
-            let png = rendered?.png ?? Data()
-            let turnId = try await conn.sendTurn(png: png, text: text, newStrokes: newStrokeCount)
-            if let r = rendered {
-                turnMappings[turnId] = TurnMapping(bounds: r.bounds, scale: r.scale, imageSize: CGSize(width: r.bounds.width * r.scale, height: r.bounds.height * r.scale))
-                lastTurnId = turnId
-            }
-            conn.items.append(ChatItem(role: .user, text: text.isEmpty ? "（圖）" : text, image: rendered?.image))
-            var b = store.current
-            b.sentStrokeCount = drawing.strokes.count
-            store.current = b
-            caption = ""
-            showFlash(conn.agentReady ? "已送給 agent" : "已送出，agent 尚未連上")
+            let turnId = try await conn.sendTurn(png: out.png, text: "", newStrokes: newStrokeCount, boardId: board.id, boardTitle: board.title)
+            let t = Turn(id: turnId, boardID: board.id, note: "", newStrokes: newStrokeCount, drawingData: drawing.dataRepresentation(), layers: board.layers,
+                         pngFile: nil, imageBounds: out.bounds, imageScale: out.scale)
+            store.addTurn(t, png: out.png)
+            var b = store.current; b.sentStrokeCount = drawing.strokes.count; store.current = b
+            showFlash(conn.agentReady ? "Sent to agent" : "Sent · no agent listening yet")
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } catch {
-            showFlash("送出失敗：\(error.localizedDescription)")
+            showFlash("Send failed: \(error.localizedDescription)")
         }
     }
 
@@ -167,165 +240,113 @@ struct ContentView: View {
         Task { try? await Task.sleep(nanoseconds: 1_800_000_000); if flash == s { flash = nil } }
     }
 
-    /// Convert the agent's SVG into pen strokes and add them to the current page, aligned with the image it answered.
-    private func placeAgentDrawing(_ item: ChatItem, announce: Bool) {
-        guard let svg = item.svg else { return }
-        let mapping: SVGStrokeMapping
-        if let id = item.turnId ?? lastTurnId, let m = turnMappings[id] {
-            mapping = SVGStrokeMapping(origin: m.bounds.origin, pixelsPerPoint: m.scale, viewBox: nil, imageSize: m.imageSize)
-        } else {
-            // No known image space: drop it near the top-left of what is currently visible.
-            let visible = canvasController.canvas.map { CGRect(origin: $0.contentOffset, size: $0.bounds.size) } ?? CGRect(x: 0, y: 0, width: 800, height: 600)
-            mapping = SVGStrokeMapping(origin: CGPoint(x: visible.minX + 40, y: visible.minY + 120), pixelsPerPoint: 1, viewBox: nil, imageSize: .zero)
+    // MARK: events from the agent
+
+    private func wireEvents() {
+        conn.onEvent = { ev in
+            switch ev {
+            case .reply(let r): handleReply(r)
+            case .taken(let id): store.update(id) { $0.taken = true }
+            case .title(let boardId, let title):
+                var b = store.current
+                if let bid = boardId, let uuid = UUID(uuidString: bid), uuid != b.id, let other = store.board(uuid) { if !other.titleLocked { store.rename(uuid, to: title) }; return }
+                if !b.titleLocked { b.title = title; store.current = b; showFlash("Page titled “\(title)”") }
+            case .snapshotRequest(let id): conn.postSnapshot(id: id, png: renderCurrent(highlight: false)?.png)
+            case .system(let s): showFlash(s)
+            }
         }
-        let strokes = SVGStrokes.strokes(from: svg, mapping: mapping, defaultColor: UIColor(red: 0.78, green: 0.33, blue: 0.17, alpha: 1))
-        guard !strokes.isEmpty else { if announce { showFlash("agent 的圖沒有可轉成筆跡的線條") }; return }
+    }
+
+    private func handleReply(_ r: Reply) {
+        var turnId = r.turnId.flatMap { id in store.turn(id) != nil ? id : nil } ?? store.currentTurns.last?.id
+        if turnId == nil {
+            // Agent spoke first: anchor the reply to a synthetic turn on the current page, in the visible area.
+            let vis = canvasController.visibleCanvasRect
+            let t = Turn(id: "agent-" + UUID().uuidString.prefix(8).lowercased(), boardID: store.currentID, note: "", newStrokes: 0,
+                         drawingData: drawing.dataRepresentation(), layers: store.current.layers, pngFile: nil, imageBounds: vis, imageScale: 1, taken: true, agentInitiated: true)
+            store.addTurn(t, png: nil)
+            turnId = t.id
+        }
+        guard let turnId, let turn = store.turn(turnId) else { showFlash(r.text); return }
+        if !r.text.isEmpty { store.update(turnId) { $0.agentText = ($0.agentText.map { $0 + "\n" } ?? "") + r.text; $0.taken = true } }
+        if !(showDrawer && tab == .turns) { unread += 1 }
+        for f in r.files {
+            var item = AgentItem(kind: f.kind, svg: f.svg, file: nil, remoteURL: f.remoteURL?.absoluteString, wantsLayer: f.layer)
+            if f.kind == "sketch" {
+                store.update(turnId) { $0.agentItems.append(item) }
+                if settings.autoPlaceAgentDrawing, turn.boardID == store.currentID { placeSketch(turn: store.turn(turnId)!, item: item, announce: true) }
+            } else if let url = f.remoteURL {
+                let ext = (f.name as NSString).pathExtension.isEmpty ? "png" : (f.name as NSString).pathExtension
+                let name = "\(item.id.uuidString).\(ext)"
+                store.update(turnId) { $0.agentItems.append(item) }
+                Task {
+                    do {
+                        try await conn.download(url, to: store.agentFileURL(name))
+                        item.file = name
+                        store.update(turnId) { t in if let i = t.agentItems.firstIndex(where: { $0.id == item.id }) { t.agentItems[i].file = name } }
+                        if f.layer, turn.boardID == store.currentID { placeLayer(turn: store.turn(turnId)!, item: store.turn(turnId)!.agentItems.first { $0.id == item.id }!) }
+                        else { showFlash("Agent sent a \(f.kind) image") }
+                    } catch { showFlash("Could not download \(f.name)") }
+                }
+            }
+        }
+    }
+
+    // MARK: placing agent output
+
+    /// Convert the agent's SVG into pen strokes aligned with the turn's image, appended one by one.
+    private func placeSketch(turn: Turn, item: AgentItem, announce: Bool) {
+        guard let svg = item.svg, turn.boardID == store.currentID else { return }
+        let mapping = SVGStrokeMapping(origin: turn.imageBounds.origin, pixelsPerPoint: turn.imageScale, viewBox: nil, imageSize: CGSize(width: turn.imageBounds.width * turn.imageScale, height: turn.imageBounds.height * turn.imageScale))
+        let base = Date()
+        let strokes = SVGStrokes.strokes(from: svg, mapping: mapping, defaultColor: Settings.agentColor, baseDate: base)
+        guard !strokes.isEmpty else { if announce { showFlash("Nothing in the agent's SVG could become strokes") }; return }
         let before = drawing
-        drawing.append(PKDrawing(strokes: strokes))
-        strokesChanged()
-        canvasController.canvas?.undoManager?.registerUndo(withTarget: canvasController) { _ in
-            Task { @MainActor in self.drawing = before; self.strokesChanged() }
-        }
-        if announce { showFlash("agent 畫了 \(strokes.count) 筆，可以直接改") }
-    }
-}
-
-// MARK: - Side panel
-
-struct SidePanel: View {
-    let items: [ChatItem]
-    var onPlace: (ChatItem) -> Void
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    Text("對話").font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase).padding(.top, 14)
-                    if items.isEmpty {
-                        Text("畫點東西，按送出。agent 的回覆會出現在這裡。").font(.callout).foregroundStyle(.secondary)
-                    }
-                    ForEach(items) { item in ChatBubble(item: item, onPlace: onPlace).id(item.id) }
-                }
-                .padding(.horizontal, 14).padding(.bottom, 20)
+        let dates = strokes.map { $0.path.creationDate.timeIntervalSince1970 }
+        store.recordAgentStrokes(turnId: turn.id, dates: dates)
+        store.update(turn.id) { t in if let i = t.agentItems.firstIndex(where: { $0.id == item.id }) { t.agentItems[i].strokeDates += dates } }
+        Task { @MainActor in
+            for s in strokes {
+                drawing.append(PKDrawing(strokes: [s]))
+                try? await Task.sleep(nanoseconds: 45_000_000)
             }
-            .onChange(of: items.count) { _, _ in if let last = items.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } } }
-        }
-        .background(Color(uiColor: .secondarySystemBackground))
-    }
-}
-
-struct ChatBubble: View {
-    let item: ChatItem
-    var onPlace: (ChatItem) -> Void
-    var body: some View {
-        switch item.role {
-        case .system:
-            Text(item.text).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
-        case .user:
-            VStack(alignment: .trailing, spacing: 6) {
-                if let img = item.image { Image(uiImage: img).resizable().scaledToFit().frame(maxHeight: 160).clipShape(RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary)) }
-                if item.text != "（圖）" { Text(item.text) }
+            strokesChanged()
+            canvasController.canvas?.undoManager?.registerUndo(withTarget: canvasController) { _ in
+                Task { @MainActor in self.drawing = before; self.strokesChanged() }
             }
-            .padding(10).background(Color(uiColor: .tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-            .frame(maxWidth: .infinity, alignment: .trailing)
-        case .agent:
-            VStack(alignment: .leading, spacing: 8) {
-                if !item.text.isEmpty { Text(item.text).textSelection(.enabled) }
-                if let svg = item.svg {
-                    SVGView(svg: svg).frame(height: 200).clipShape(RoundedRectangle(cornerRadius: 8))
-                    Button { onPlace(item) } label: { Label("再畫到畫布", systemImage: "pencil.and.outline") }.buttonStyle(.bordered).controlSize(.small)
-                }
-                if let url = item.imageURL { AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { ProgressView() }.frame(maxHeight: 200) }
-            }
-            .padding(12).background(Color(red: 1, green: 0.96, blue: 0.93), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.95, green: 0.85, blue: 0.8)))
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if announce { showFlash("Agent drew \(strokes.count) strokes — erase, move, or draw over them") }
         }
     }
-}
 
-struct SVGView: UIViewRepresentable {
-    let svg: String
-    func makeUIView(context: Context) -> WKWebView {
-        let v = WKWebView()
-        v.isOpaque = false
-        v.scrollView.isScrollEnabled = false
-        return v
+    /// Put an agent image onto the canvas as a layer, sized to fit the visible area, below the drawing when possible.
+    private func placeLayer(turn: Turn, item: AgentItem) {
+        guard let file = item.file, let img = store.image(named: file, in: store.agentDir) else { showFlash("Image not downloaded yet"); return }
+        let visible = canvasController.visibleCanvasRect
+        let maxW = visible.width * 0.6, maxH = visible.height * 0.6
+        var w = img.size.width / 2, h = img.size.height / 2
+        let k = min(1, min(maxW / w, maxH / h)); w *= k; h *= k
+        var origin = CGPoint(x: visible.midX - w / 2, y: visible.midY - h / 2)
+        if !drawing.strokes.isEmpty, drawing.bounds.maxY + 40 + h < visible.maxY { origin = CGPoint(x: max(visible.minX + 20, drawing.bounds.minX), y: drawing.bounds.maxY + 40) }
+        guard let layer = store.addLayer(fromAgentFile: file, kind: item.kind, turnId: turn.id, frame: CGRect(origin: origin, size: CGSize(width: w, height: h))) else { return }
+        store.update(turn.id) { t in if let i = t.agentItems.firstIndex(where: { $0.id == item.id }) { t.agentItems[i].placedAsLayer = true } }
+        selectedLayerID = layer.id
+        showFlash("\(item.kind) placed as a layer — drag to move, corners to resize")
     }
-    func updateUIView(_ v: WKWebView, context: Context) {
-        let html = "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'><style>html,body{margin:0;height:100%;background:#fff}svg{width:100%;height:100%}</style>\(svg)"
-        v.loadHTMLString(html, baseURL: nil)
+
+    private func branch(_ t: Turn) {
+        let b = store.branch(from: t)
+        showFlash("Branched into “\(b.title)”")
     }
-}
 
-// MARK: - Pages
-
-struct PagesView: View {
-    @EnvironmentObject var store: BoardStore
-    @Environment(\.dismiss) var dismiss
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(store.boards) { b in
-                    Button { store.currentID = b.id; dismiss() } label: {
-                        HStack {
-                            Image(uiImage: TurnRenderer.render(b.drawing, sentStrokeCount: 0, highlightNew: false)?.image ?? UIImage())
-                                .resizable().scaledToFit().frame(width: 96, height: 64).background(.white).clipShape(RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
-                            VStack(alignment: .leading) {
-                                Text(b.title).foregroundStyle(.primary)
-                                Text("\(b.drawing.strokes.count) 筆 · \(b.updatedAt.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if b.id == store.currentID { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                        }
-                    }
-                }
-                .onDelete { idx in idx.map { store.boards[$0].id }.forEach(store.delete) }
-            }
-            .navigationTitle("頁面")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) { Button { store.newBoard(); dismiss() } label: { Label("新頁", systemImage: "plus") } }
-                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
-            }
-        }
-    }
-}
-
-// MARK: - Settings
-
-struct SettingsView: View {
-    @EnvironmentObject var settings: Settings
-    @EnvironmentObject var conn: ServerConnection
-    @Environment(\.dismiss) var dismiss
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("連線") {
-                    TextField("主機:埠（例如 192.168.0.128:8791）", text: $settings.host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                    if !conn.discovered.isEmpty {
-                        ForEach(conn.discovered, id: \.self) { h in
-                            Button { settings.host = h } label: { Label(h, systemImage: "bonjour") }
-                        }
-                    } else {
-                        Text("在區網上找不到 Mac。確認 Mac 端已跑 `npm run web-only`。").font(.footnote).foregroundStyle(.secondary)
-                    }
-                    TextField("Token（選填）", text: $settings.token).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    if let e = conn.lastError { Text(e).font(.footnote).foregroundStyle(.red) }
-                }
-                Section("送出") {
-                    Toggle("只接受 Apple Pencil", isOn: $settings.pencilOnly)
-                    Toggle("新筆跡強調（舊筆跡變灰）", isOn: $settings.highlightNewStrokes)
-                    Toggle("Pencil 雙擊送出", isOn: $settings.pencilDoubleTapSends)
-                    VStack(alignment: .leading) {
-                        Text(settings.autoSendSeconds == 0 ? "停筆自動送出：關閉" : "停筆 \(Int(settings.autoSendSeconds)) 秒自動送出")
-                        Slider(value: $settings.autoSendSeconds, in: 0...8, step: 1)
-                    }
-                }
-                Section("回覆") {
-                    Toggle("agent 畫的圖自動放到畫布（可編輯筆跡）", isOn: $settings.autoPlaceAgentDrawing)
-                }
-            }
-            .navigationTitle("設定")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-        }
+    private var drawerActions: DrawerActions {
+        DrawerActions(
+            placeSketch: { t, i in placeSketch(turn: t, item: i, announce: true) },
+            placeLayer: { t, i in placeLayer(turn: t, item: i) },
+            branch: branch,
+            preview: { previewTurn = $0 },
+            removeAgentStrokes: { t in store.removeAgentStrokes(turnId: t.id, from: &drawing); showFlash("Removed the agent's strokes from that turn") },
+            openBoard: { store.currentID = $0 },
+            newBoard: { store.newBoard() },
+            flash: showFlash)
     }
 }

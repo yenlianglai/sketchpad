@@ -2,36 +2,23 @@ import Foundation
 import Combine
 import UIKit
 
-/// Something shown in the side panel.
-struct ChatItem: Identifiable {
-    enum Role { case user, agent, system }
-    let id = UUID()
-    let role: Role
-    var text: String
-    var image: UIImage? = nil
-    var svg: String? = nil
-    var imageURL: URL? = nil
-    /// The turn this reply answers (its image is the coordinate space of `svg`).
-    var turnId: String? = nil
-    let time = Date()
-}
+/// A file the agent handed back with a reply.
+struct ReplyFile { var kind: String; var name: String; var svg: String?; var remoteURL: URL?; var layer: Bool }
+struct Reply { var text: String; var turnId: String?; var files: [ReplyFile] }
 
 /// Finds the Mac server (Bonjour `_sketchpad._tcp`, or a manual host) and talks to it:
-/// POST /turn for sketches, WebSocket /ws for replies and snapshot requests.
+/// POST /turn for sketches, WebSocket /ws for replies and requests.
 @MainActor
 final class ServerConnection: NSObject, ObservableObject {
     enum Status: Equatable { case disconnected, connecting, connected }
+    enum Event { case reply(Reply), taken(String), title(boardId: String?, title: String), snapshotRequest(String), system(String) }
 
     @Published var status: Status = .disconnected
-    @Published var activeHost = ""
     @Published var agentReady = false
-    @Published var discovered: [String] = []      // host:port from Bonjour
-    @Published var items: [ChatItem] = []
+    @Published var discovered: [String] = []
     @Published var lastError: String?
 
-    /// Called when the agent asks for a snapshot of the canvas right now.
-    var snapshotProvider: (() -> Data?)?
-    var onReply: ((ChatItem) -> Void)?
+    var onEvent: ((Event) -> Void)?
 
     private var settings: Settings?
     private var socket: URLSessionWebSocketTask?
@@ -39,45 +26,43 @@ final class ServerConnection: NSObject, ObservableObject {
     private var reconnectTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private lazy var session = URLSession(configuration: .default)
-
-    // Bonjour
     private var browser: NetServiceBrowser?
     private var services: [NetService] = []
 
     func start(settings: Settings) {
         self.settings = settings
         startBrowsing()
-        settings.$host.removeDuplicates().sink { [weak self] _ in self?.reconnectNow() }.store(in: &cancellables)
+        settings.$host.removeDuplicates().dropFirst().sink { [weak self] _ in self?.reconnectNow() }.store(in: &cancellables)
         connect()
     }
 
     // MARK: HTTP
 
-    private var baseURL: URL? {
+    var baseURL: URL? {
         guard let host = settings?.host, !host.isEmpty else { return nil }
         return URL(string: "http://\(host)")
     }
-    private func withToken(_ url: URL) -> URL {
+    func withToken(_ url: URL) -> URL {
         guard let t = settings?.token, !t.isEmpty, var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
         c.queryItems = (c.queryItems ?? []) + [URLQueryItem(name: "token", value: t)]
         return c.url ?? url
     }
 
     /// Sends one turn. Returns the server's turn id.
-    func sendTurn(png: Data, text: String, newStrokes: Int) async throws -> String {
-        guard let base = baseURL else { throw NSError(domain: "sketchpad", code: 1, userInfo: [NSLocalizedDescriptionKey: "尚未設定主機"]) }
+    func sendTurn(png: Data, text: String, newStrokes: Int, boardId: UUID, boardTitle: String) async throws -> String {
+        guard let base = baseURL else { throw NSError(domain: "sketchpad", code: 1, userInfo: [NSLocalizedDescriptionKey: "No host configured"]) }
         var req = URLRequest(url: withToken(base.appendingPathComponent("turn")))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
-        let body: [String: Any] = ["text": text, "png": "data:image/png;base64," + png.base64EncodedString(), "strokes": newStrokes]
+        let body: [String: Any] = ["text": text, "png": png.isEmpty ? NSNull() : "data:image/png;base64," + png.base64EncodedString(), "strokes": newStrokes, "boardId": boardId.uuidString, "boardTitle": boardTitle]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, resp) = try await session.data(for: req)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw NSError(domain: "sketchpad", code: 2, userInfo: [NSLocalizedDescriptionKey: "server 回應 \((resp as? HTTPURLResponse)?.statusCode ?? 0)"]) }
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw NSError(domain: "sketchpad", code: 2, userInfo: [NSLocalizedDescriptionKey: "Server returned \((resp as? HTTPURLResponse)?.statusCode ?? 0)"]) }
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        return json?["turnId"] as? String ?? "?"
+        return json?["turnId"] as? String ?? UUID().uuidString.prefix(8).lowercased()
     }
 
-    private func postSnapshot(id: String, png: Data?) {
+    func postSnapshot(id: String, png: Data?) {
         guard let base = baseURL else { return }
         var req = URLRequest(url: withToken(base.appendingPathComponent("snapshot")))
         req.httpMethod = "POST"
@@ -86,6 +71,13 @@ final class ServerConnection: NSObject, ObservableObject {
         if let png { body["png"] = "data:image/png;base64," + png.base64EncodedString() }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         session.dataTask(with: req).resume()
+    }
+
+    /// Download an agent file to a local URL.
+    func download(_ url: URL, to dest: URL) async throws {
+        let (data, resp) = try await session.data(from: url)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw NSError(domain: "sketchpad", code: 3, userInfo: [NSLocalizedDescriptionKey: "download failed"]) }
+        try data.write(to: dest, options: .atomic)
     }
 
     // MARK: WebSocket
@@ -102,7 +94,6 @@ final class ServerConnection: NSObject, ObservableObject {
         c.scheme = "ws"
         guard let url = c.url else { return }
         status = .connecting
-        activeHost = settings?.host ?? ""
         let task = session.webSocketTask(with: withToken(url))
         socket = task
         task.resume()
@@ -116,7 +107,7 @@ final class ServerConnection: NSObject, ObservableObject {
                 guard let self, self.socket === task else { return }
                 switch result {
                 case .success(let msg):
-                    if self.status != .connected { self.status = .connected; self.reconnectDelay = 1 }
+                    if self.status != .connected { self.status = .connected; self.reconnectDelay = 1; self.lastError = nil }
                     if case .string(let s) = msg { self.handle(s) }
                     self.receiveLoop(task)
                 case .failure(let err):
@@ -155,26 +146,26 @@ final class ServerConnection: NSObject, ObservableObject {
         case "hello", "mcp":
             agentReady = (m["ready"] as? Bool) ?? (m["mcp"] as? Bool) ?? false
         case "reply":
-            var item = ChatItem(role: .agent, text: m["text"] as? String ?? "")
-            item.turnId = m["turnId"] as? String
-            if let files = m["files"] as? [[String: Any]] {
-                for f in files {
-                    guard let url = f["url"] as? String else { continue }
-                    if url.hasPrefix("data:image/svg+xml;base64,"), let d = Data(base64Encoded: String(url.dropFirst("data:image/svg+xml;base64,".count))) {
-                        item.svg = String(data: d, encoding: .utf8)
-                    } else if url.hasPrefix("/"), let base = baseURL {
-                        item.imageURL = withToken(base.appendingPathComponent(url))
-                    }
+            var files: [ReplyFile] = []
+            for f in (m["files"] as? [[String: Any]]) ?? [] {
+                guard let url = f["url"] as? String else { continue }
+                let kind = f["kind"] as? String ?? "image"
+                let name = f["name"] as? String ?? "file"
+                if url.hasPrefix("data:image/svg+xml;base64,"), let d = Data(base64Encoded: String(url.dropFirst("data:image/svg+xml;base64,".count))) {
+                    files.append(ReplyFile(kind: "sketch", name: name, svg: String(data: d, encoding: .utf8), remoteURL: nil, layer: false))
+                } else if url.hasPrefix("/"), let base = baseURL {
+                    files.append(ReplyFile(kind: kind, name: name, svg: nil, remoteURL: withToken(base.appendingPathComponent(url)), layer: f["layer"] as? Bool ?? false))
                 }
             }
-            items.append(item)
-            onReply?(item)
+            onEvent?(.reply(Reply(text: m["text"] as? String ?? "", turnId: m["turnId"] as? String, files: files)))
         case "taken":
-            items.append(ChatItem(role: .system, text: "agent 已讀取這回合"))
+            if let id = m["turnId"] as? String { onEvent?(.taken(id)) }
+        case "title":
+            onEvent?(.title(boardId: m["boardId"] as? String, title: m["title"] as? String ?? ""))
         case "sys":
-            items.append(ChatItem(role: .system, text: m["text"] as? String ?? ""))
+            onEvent?(.system(m["text"] as? String ?? ""))
         case "snapshot_request":
-            if let id = m["id"] as? String { postSnapshot(id: id, png: snapshotProvider?()) }
+            if let id = m["id"] as? String { onEvent?(.snapshotRequest(id)) }
         default: break
         }
     }
@@ -191,11 +182,7 @@ final class ServerConnection: NSObject, ObservableObject {
 
 extension ServerConnection: NetServiceBrowserDelegate, NetServiceDelegate {
     nonisolated func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-        Task { @MainActor in
-            service.delegate = self
-            services.append(service)
-            service.resolve(withTimeout: 5)
-        }
+        Task { @MainActor in service.delegate = self; services.append(service); service.resolve(withTimeout: 5) }
     }
     nonisolated func netServiceBrowser(_ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool) {
         Task { @MainActor in
@@ -208,7 +195,6 @@ extension ServerConnection: NetServiceBrowserDelegate, NetServiceDelegate {
             guard let host = sender.hostName else { return }
             let entry = "\(host.trimmingCharacters(in: CharacterSet(charactersIn: "."))):\(sender.port)"
             if !discovered.contains(entry) { discovered.append(entry) }
-            // First discovery with no manual host configured: adopt it.
             if let s = settings, s.host.isEmpty { s.host = entry }
         }
     }
