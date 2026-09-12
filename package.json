@@ -9,6 +9,7 @@
     "headless": "node server/channel.mjs --driver=headless",
     "web-only": "node server/channel.mjs --driver=none",
     "test:mcp": "node scripts/test-mcp-client.mjs",
+    "test:sketchpad": "node scripts/test-sketchpad-mcp.mjs",
     "cert": "sh scripts/gen-cert.sh"
   },
   "engines": {

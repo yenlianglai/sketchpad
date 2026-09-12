@@ -12,7 +12,7 @@ const png = sketch && existsSync(sketch)
   ? 'data:image/png;base64,' + readFileSync(sketch).toString('base64')
   : 'data:image/png;base64,' + readFileSync(new URL('./fixtures/box.png', import.meta.url)).toString('base64')
 
-const server = spawn('node', ['server/channel.mjs', '--driver=headless'], { env: { ...process.env, SKETCH_PORT: String(PORT) }, stdio: ['ignore', 'inherit', 'inherit'] })
+const server = spawn('node', ['server/channel.mjs', '--driver=headless'], { env: { ...process.env, SKETCH_PORT: String(PORT), SKETCH_NO_TLS: '1' }, stdio: ['ignore', 'inherit', 'inherit'] })
 const done = () => { server.kill('SIGINT'); setTimeout(() => process.exit(0), 3000) }
 process.on('SIGINT', done)
 

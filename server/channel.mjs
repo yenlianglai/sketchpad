@@ -20,7 +20,9 @@ import { WebSocketServer } from 'ws'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { createHeadlessDriver } from './headless.mjs'
+import { createSketchpad } from './sketchpad.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const WEB_DIR = join(ROOT, 'web')
@@ -159,6 +161,21 @@ function broadcast(msg) {
   for (const ws of sockets) if (ws.readyState === 1) ws.send(s)
 }
 function authorized(url) { return !TOKEN || url.searchParams.get('token') === TOKEN }
+
+// Sketchpad-as-MCP: shared turn queue + tool set, served over Streamable HTTP at /mcp (stateless,
+// one transport per request) so any agent — Claude Code, ADK, Codex — can pull turns.
+const sketchpad = createSketchpad({ log, broadcast, clientCount: () => sockets.size })
+async function handleMcp(req, res) {
+  let body
+  if (req.method === 'POST') {
+    try { body = JSON.parse((await readBody(req)).toString('utf8')) } catch { return send(res, 400, 'invalid json') }
+  }
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+  const server = sketchpad.buildServer()
+  res.on('close', () => { transport.close(); server.close() })
+  await server.connect(transport)
+  await transport.handleRequest(req, res, body)
+}
 function readBody(req) {
   return new Promise((res, rej) => {
     const chunks = []
@@ -173,6 +190,12 @@ async function handle(req, res) {
   const url = new URL(req.url, 'http://x')
   if (!authorized(url)) return send(res, 401, 'bad token')
   try {
+    if (url.pathname === '/mcp') return handleMcp(req, res)
+    if (req.method === 'POST' && url.pathname === '/snapshot') {
+      const body = JSON.parse((await readBody(req)).toString('utf8'))
+      sketchpad.resolveSnapshot(body.id, body.png ? body.png.replace(/^data:image\/png;base64,/, '') : null)
+      return send(res, 200, 'ok')
+    }
     if (req.method === 'POST' && url.pathname === '/turn') {
       // { text, png: dataURL|null, strokes, durationMs }
       const body = JSON.parse((await readBody(req)).toString('utf8'))
@@ -183,13 +206,15 @@ async function handle(req, res) {
         pngPath = join(INBOX_DIR, `${new Date().toISOString().replace(/[:.]/g, '-')}-${turnId}.png`)
         writeFileSync(pngPath, Buffer.from(b64, 'base64'))
       }
-      const delivered = deliverTurn({ turnId, text: body.text, pngPath, pngBase64: b64, strokes: body.strokes, durationMs: body.durationMs })
+      // Always queue for MCP pullers; the push drivers (channel/headless) are additive.
+      sketchpad.pushTurn({ turnId, text: body.text, pngPath, pngBase64: b64, strokes: body.strokes, durationMs: body.durationMs, ts: Date.now() })
+      const delivered = DRIVER === 'none' ? true : deliverTurn({ turnId, text: body.text, pngPath, pngBase64: b64, strokes: body.strokes, durationMs: body.durationMs })
       log(`turn ${turnId}: "${(body.text || '').slice(0, 60)}" png=${pngPath ? basename(pngPath) : '-'} delivered=${delivered}`)
       broadcast({ type: 'turn', turnId, text: body.text, pngPath, delivered, ts: Date.now() })
       return send(res, 200, JSON.stringify({ turnId, pngPath, delivered }), 'application/json')
     }
     if (url.pathname === '/health') {
-      return send(res, 200, JSON.stringify({ ok: true, mcp: mcpReady, clients: sockets.size }), 'application/json')
+      return send(res, 200, JSON.stringify({ ok: true, driver: DRIVER, mcp: mcpReady, clients: sockets.size, pending_turns: sketchpad.pending() }), 'application/json')
     }
     if (url.pathname.startsWith('/files/')) {
       const f = basename(url.pathname)
@@ -208,7 +233,7 @@ async function handle(req, res) {
   }
 }
 
-const tls = existsSync(join(CERT_DIR, 'server.key')) && existsSync(join(CERT_DIR, 'server.crt'))
+const tls = !process.env.SKETCH_NO_TLS && existsSync(join(CERT_DIR, 'server.key')) && existsSync(join(CERT_DIR, 'server.crt'))
 const HOST_HINT = process.env.SKETCH_HOST || lanIp()
 function lanIp() {
   for (const addrs of Object.values(networkInterfaces()))
@@ -230,9 +255,9 @@ httpServer.on('upgrade', (req, socket, head) => {
   })
 })
 
-// When TLS is on, also serve the certificate over plain http on PORT+1 so the iPad can
-// install it straight from Safari instead of via AirDrop.
-if (tls) {
+// Plain http on PORT+1: the MCP endpoint for agents on this machine (http://localhost:PORT+1/mcp),
+// and, when TLS is on, the certificate so the iPad can install it straight from Safari.
+{
   const certPage = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Install certificate</title>
 <style>body{font:17px/1.5 -apple-system,system-ui;max-width:560px;margin:40px auto;padding:0 20px;color:#1a1a1a}
@@ -246,13 +271,22 @@ ol li{margin:8px 0}code{background:#eee;padding:2px 6px;border-radius:4px}</styl
 <li>設定 › 一般 › 關於本機 › <b>憑證信任設定</b> › 把 <code>sketchpad</code> 開啟</li>
 <li>回 Safari 開 <a href="https://${HOST_HINT}:${PORT}/${TOKEN ? '?token=…' : ''}">https://${HOST_HINT}:${PORT}/</a></li>
 </ol>`
-  createHttpServer((req, res) => {
-    if (req.url.startsWith('/sketchpad.crt')) {
+  createHttpServer(async (req, res) => {
+    const url = new URL(req.url, 'http://x')
+    if (url.pathname === '/mcp') {
+      if (!authorized(url)) return send(res, 401, 'bad token')
+      return handleMcp(req, res).catch(err => { log('mcp error', err.message); if (!res.headersSent) send(res, 500, err.message) })
+    }
+    if (tls && url.pathname.startsWith('/sketchpad.crt')) {
       res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="sketchpad.crt"' })
       return res.end(readFileSync(join(CERT_DIR, 'server.crt')))
     }
+    if (!tls) return send(res, 200, `sketchpad MCP endpoint: /mcp\nweb UI: http://${HOST_HINT}:${PORT}/ (no TLS; run npm run cert for iPad mic)`)
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(certPage)
-  }).listen(PORT + 1, '0.0.0.0', () => log(`cert install page on http://${HOST_HINT}:${PORT + 1}/  (open this on the iPad first)`))
+  }).listen(PORT + 1, '0.0.0.0', () => {
+    log(`MCP endpoint (Streamable HTTP): http://localhost:${PORT + 1}/mcp${TOKEN ? '?token=***' : ''}`)
+    if (tls) log(`cert install page on http://${HOST_HINT}:${PORT + 1}/  (open this on the iPad first)`)
+  })
 }
 
 httpServer.listen(PORT, '0.0.0.0', () => {

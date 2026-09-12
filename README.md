@@ -82,6 +82,35 @@ npm run test:mcp
 - 未實作 permission relay：Claude 在 session 卡 permission prompt 時，要回 Mac 按。可在 server 加 `claude/channel/permission` capability 轉發到 iPad。
 - `--dangerously-load-development-channels` 是 preview 期間的 flag，語法可能變。
 
+## iPad 當外接手寫板：Sketchpad MCP（推薦）
+
+server 同時是一個**標準 MCP server**（Streamable HTTP，`http://localhost:8791/mcp`）。
+對話邏輯完全留在 agent 自己的 session；iPad 只是輸入輸出裝置。不綁 provider：Claude Code、ADK、Codex 都能接。
+
+| tool | 作用 |
+| --- | --- |
+| `sketchpad_wait_for_turn` | 阻塞直到使用者說完一段話（或按送出），回傳逐字稿 + 草圖 PNG image block |
+| `sketchpad_get_canvas` | 不等語音，立刻抓一張目前畫布 |
+| `sketchpad_show` | 在 iPad 顯示一句話（會朗讀），可附 SVG 畫回去 |
+| `sketchpad_status` | iPad 是否連著、排隊回合數 |
+
+啟動 server（任何 driver 都有 MCP endpoint；純手寫板用法選 `none`）：
+
+```bash
+npm run web-only
+```
+
+Claude Code 端，加一次即可在所有專案使用：
+
+```bash
+claude mcp add --scope user --transport http sketchpad http://localhost:8791/mcp
+```
+
+然後在任何 Claude Code session 說「/sketchpad」或「聽 iPad」。repo 內附 `.claude/skills/sketchpad/SKILL.md`
+描述這個 loop；複製到 `~/.claude/skills/` 就能全域使用。ADK 端用 `MCPToolset` 指向同一個 URL。
+
+`wait_for_turn` 預設等 50 秒後回「no turn」讓 agent 再呼叫一次；若 MCP tool timeout 較短可調 `timeout_seconds`。
+
 ## 管理者還沒開 Channels？改用 headless driver
 
 Channels 要組織開 `channelsEnabled`。等不到的時候，server 可以自己拉起一個 `claude -p`

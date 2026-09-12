@@ -94,8 +94,9 @@ function addMsg(kind, text, files = []) {
   el.textContent = text || ''
   for (const f of files) {
     const isImg = /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name)
-    if (isImg) { const img = document.createElement('img'); img.src = f.url + q; img.alt = f.name; el.appendChild(img) }
-    else { const a = document.createElement('a'); a.href = f.url + q; a.target = '_blank'; a.textContent = `[${f.name}]`; el.appendChild(a) }
+    const href = f.url.startsWith('/') ? f.url + q : f.url // data: URLs carry no token
+    if (isImg) { const img = document.createElement('img'); img.src = href; img.alt = f.name; el.appendChild(img) }
+    else { const a = document.createElement('a'); a.href = href; a.target = '_blank'; a.textContent = `[${f.name}]`; el.appendChild(a) }
   }
   log.appendChild(el); log.scrollTop = log.scrollHeight
   return el
@@ -117,6 +118,11 @@ function connectWS() {
       if (m.type === 'mcp' && ready && m.model) addMsg('sys', `Claude 已就緒 · ${m.model}`)
     }
     if (m.type === 'sys') addMsg('sys', m.text)
+    if (m.type === 'taken') addMsg('sys', 'agent 已讀取這回合')
+    if (m.type === 'snapshot_request') {
+      const png = strokes.length ? canvas.toDataURL('image/png') : null
+      fetch(`/snapshot${q}`, { method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify({ id: m.id, png }) }).catch(() => {})
+    }
     if (m.type === 'reply') {
       addMsg('assistant', m.text, m.files)
       if ($('tts').checked && m.text) speak(m.text)
