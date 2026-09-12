@@ -24,7 +24,7 @@ Claude 用 Read 看圖，用 `reply` tool 把文字或圖檔推回 iPad，iPad �
 | --- | --- |
 | Node ≥ 22.12 | server 與測試用。`node --version` |
 | Claude Code ≥ 2.1.23x | 已用 claude.ai 登入（`claude auth login`）。 |
-| **Team/Enterprise 管理者開 Channels** | Team 帳號預設封鎖 channels。Owner 需到 claude.ai → Admin settings → Claude Code → Channels 開啟（managed setting `channelsEnabled: true`）。沒開的話 MCP server 會連上、`reply` tool 可用，但 **iPad 訊息不會進 session**，啟動時會看到 "blocked by org policy"。 |
+| **Team/Enterprise 管理者開 Channels**（僅 channel driver） | Team 帳號預設封鎖 channels；等不到的話見下方 headless driver。Owner 需到 claude.ai → Admin settings → Claude Code → Channels 開啟（managed setting `channelsEnabled: true`）。沒開的話 MCP server 會連上、`reply` tool 可用，但 **iPad 訊息不會進 session**，啟動時會看到 "blocked by org policy"。 |
 | iPad 與 Mac 同網段（或 Tailscale） | iPad 用 Safari 開 Mac 的 IP。 |
 | HTTPS 憑證 | iPad Safari 只在 https 下允許麥克風。見下方。 |
 
@@ -79,3 +79,29 @@ npm run test:mcp
 - **畫布是純 canvas**，只有筆、橡皮、復原、清空。要形狀、選取、讓 Claude 把 SVG 畫回畫布上，下一步換 tldraw。
 - 未實作 permission relay：Claude 在 session 卡 permission prompt 時，要回 Mac 按。可在 server 加 `claude/channel/permission` capability 轉發到 iPad。
 - `--dangerously-load-development-channels` 是 preview 期間的 flag，語法可能變。
+
+## 管理者還沒開 Channels？改用 headless driver
+
+Channels 要組織開 `channelsEnabled`。等不到的時候，server 可以自己拉起一個 `claude -p`
+（stream-json 進出、stdin 保持開啟做多回合），只需要你現有的 claude.ai 訂閱登入：
+
+```bash
+SKETCH_CWD=/path/to/repo-you-want-claude-to-work-in npm run headless
+```
+
+差別：這是 server 自己的獨立 session，不是注入你終端機正在用的那個。回覆改由 Claude 的
+文字輸出直接轉發到 iPad（不用 `reply` tool），工具呼叫會以 ⚙ 狀態行顯示。
+
+| 變數 | 預設 | 說明 |
+| --- | --- | --- |
+| `SKETCH_CWD` | repo 根目錄 | Claude 工作的目錄 |
+| `SKETCH_PERMISSION_MODE` | 不帶 | 傳給 `--permission-mode`。沒人能按允許，會提示的工具直接被拒；只看圖回話不需要。要讓它改檔案再設 `acceptEdits`。 |
+| `SKETCH_RESUME` | 無 | 給 session id 就接續既有對話 |
+
+三種 driver 一覽：
+
+| driver | 啟動方式 | 需要 |
+| --- | --- | --- |
+| `channel`（預設） | `claude --dangerously-load-development-channels server:sketch` | 組織開 channels，或個人 Pro/Max 帳號 |
+| `headless` | `npm run headless` | 任何 claude.ai 登入 |
+| `none` | `npm run web-only` | 無，只測 UI |

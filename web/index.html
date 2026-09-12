@@ -48,7 +48,7 @@
   <header>
     <span class="title">Sketch + Voice → Claude</span>
     <span class="status"><span class="dot" id="wsDot"></span>server</span>
-    <span class="status"><span class="dot" id="mcpDot"></span>Claude Code</span>
+    <span class="status"><span class="dot" id="mcpDot"></span><span id="modeLabel">Claude Code</span></span>
     <select id="lang" title="語音語言">
       <option value="zh-TW">中文（台灣）</option>
       <option value="en-US">English</option>
@@ -110,9 +110,13 @@ function connectWS() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data)
     if (m.type === 'hello' || m.type === 'mcp') {
-      $('mcpDot').className = `dot ${m.ready ?? m.mcp ? 'on' : 'warn'}`
-      if (m.type === 'hello' && !m.mcp) addMsg('sys', 'server 在 standalone 模式，尚未接到 Claude Code')
+      const ready = m.ready ?? m.mcp
+      $('mcpDot').className = `dot ${ready ? 'on' : 'warn'}`
+      $('modeLabel').textContent = m.mode === 'headless' ? 'Claude (headless)' : 'Claude Code'
+      if (m.type === 'hello' && !ready) addMsg('sys', m.mode === 'none' ? 'web-only 模式，回合只會存檔' : '等待 Claude 就緒…')
+      if (m.type === 'mcp' && ready && m.model) addMsg('sys', `Claude 已就緒 · ${m.model}`)
     }
+    if (m.type === 'sys') addMsg('sys', m.text)
     if (m.type === 'reply') {
       addMsg('assistant', m.text, m.files)
       if ($('tts').checked && m.text) speak(m.text)

@@ -6,6 +6,8 @@
   "description": "iPad sketch + voice channel that pushes turns into a running Claude Code session",
   "scripts": {
     "server": "node server/channel.mjs",
+    "headless": "node server/channel.mjs --driver=headless",
+    "web-only": "node server/channel.mjs --driver=none",
     "test:mcp": "node scripts/test-mcp-client.mjs",
     "cert": "sh scripts/gen-cert.sh"
   },
