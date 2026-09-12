@@ -47,12 +47,15 @@ export function createSketchpad({ log, broadcast, clientCount }) {
   }
   function resolveSnapshot(id, pngBase64) { snapshots.get(id)?.(pngBase64 || null) }
 
+  // PNG IHDR: width/height are big-endian uint32 at bytes 16..24.
+  const pngSize = b64 => { try { const b = Buffer.from(b64.slice(0, 64), 'base64'); return `${b.readUInt32BE(16)}x${b.readUInt32BE(20)}` } catch { return '?' } }
   const turnText = (t, pending) => [
     `turn_id=${t.turnId}`,
-    t.text?.trim() ? `said: ${t.text.trim()}` : 'said: (nothing — respond to the drawing)',
-    `strokes_since_last_turn=${t.strokes ?? '?'} speech_ms=${t.durationMs ?? '?'}`,
+    t.text?.trim() ? `note: ${t.text.trim()}` : 'note: (none — respond to the drawing)',
+    `new_strokes=${t.strokes ?? '?'}` + (t.pngBase64 ? ` image_px=${pngSize(t.pngBase64)} (grey strokes = already seen, dark = new)` : ''),
     t.pngPath ? `sketch_file=${t.pngPath}` : 'sketch: (canvas empty)',
-    `pending_turns=${pending}`
+    `pending_turns=${pending}`,
+    'To draw back: sketchpad_show with svg in THIS image\'s pixel coordinates (viewBox="0 0 W H"), stroke-only shapes, and this turn_id.'
   ].join('\n')
 
   const TOOLS = [
@@ -71,11 +74,11 @@ export function createSketchpad({ log, broadcast, clientCount }) {
     },
     {
       name: 'sketchpad_show',
-      description: 'Show a short message (read aloud on the iPad) and optionally an SVG drawing on the iPad screen. Use it to answer or to draw something back.',
+      description: 'Show a short message on the iPad and optionally DRAW on the person\'s canvas. The svg is converted into editable pen strokes placed exactly over the image of turn_id, so use that image\'s pixel coordinates (viewBox="0 0 W H" where WxH is image_px). Use stroke-only shapes: rect, circle, ellipse, line, polyline, polygon, path (M L H V C Q Z). Fills and <text> are dropped. Keep it minimal: a box, an arrow, a corrected line. The person can erase, move, or draw over what you add and send it back.',
       inputSchema: { type: 'object', properties: {
-        text: { type: 'string', description: 'Short, spoken-friendly message.' },
-        svg: { type: 'string', description: 'Optional inline SVG markup to display.' },
-        turn_id: { type: 'string' }
+        text: { type: 'string', description: 'Short message shown in the side panel (one or two sentences).' },
+        svg: { type: 'string', description: 'Optional stroke-only SVG in the pixel space of the turn_id image. Default stroke colour is orange if omitted; stroke-width in image pixels.' },
+        turn_id: { type: 'string', description: 'The turn whose image your svg coordinates refer to. Strongly recommended when passing svg.' }
       }, required: ['text'] }
     },
     {
@@ -90,7 +93,7 @@ export function createSketchpad({ log, broadcast, clientCount }) {
       { name: 'sketchpad', version: '0.2.0' },
       {
         capabilities: { tools: {} },
-        instructions: 'A person is drawing on an iPad and talking at the same time. Call sketchpad_wait_for_turn to receive each turn (speech + drawing). Look at the image first; the drawing usually carries the intent and the speech disambiguates it. Answer with sketchpad_show (short, spoken-friendly; add an svg to draw back). Then wait for the next turn. Stop when the person says so or asks you to do something outside the sketchpad.'
+        instructions: 'A person is drawing on an iPad with a pencil. Call sketchpad_wait_for_turn to receive each turn: a PNG of their drawing (grey = strokes you already saw, dark = new since last turn) plus an optional handwritten note. Look at the image first. Answer with sketchpad_show: a short text, and when it helps, an svg drawn in that image\'s pixel coordinates — it becomes editable strokes on their canvas, so you two can iterate on the same drawing. Then wait for the next turn. Stop when the person asks or the request takes you elsewhere.'
       }
     )
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))

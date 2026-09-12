@@ -7,7 +7,9 @@ import UIKit
 enum TurnRenderer {
     static let maxPixels: CGFloat = 2400
 
-    static func render(_ drawing: PKDrawing, sentStrokeCount: Int, highlightNew: Bool) -> (png: Data, image: UIImage)? {
+    /// `bounds` is the canvas rect the image covers and `scale` its pixels-per-point, so SVG the agent
+    /// draws in image pixel coordinates can be mapped back onto the canvas.
+    static func render(_ drawing: PKDrawing, sentStrokeCount: Int, highlightNew: Bool) -> (png: Data, image: UIImage, bounds: CGRect, scale: CGFloat)? {
         guard !drawing.strokes.isEmpty else { return nil }
 
         var bounds = drawing.bounds.insetBy(dx: -48, dy: -48)
@@ -45,6 +47,6 @@ enum TurnRenderer {
             }
         }
         guard let png = image.pngData() else { return nil }
-        return (png, image)
+        return (png, image, bounds, scale)
     }
 }

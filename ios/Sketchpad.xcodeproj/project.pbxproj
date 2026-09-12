@@ -12,6 +12,7 @@
 		52623790AF8980281682BF31 /* ServerConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174F5814B810E56DBB486170 /* ServerConnection.swift */; };
 		5344DA013F11F6A0BF374138 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39EF633D5F393E123E6361C1 /* Settings.swift */; };
 		79AC6DE959935BB91DF11E79 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DA319B7A0ABEA2F42EEF6E4 /* ContentView.swift */; };
+		928B7AA06CE142B39FA641B5 /* SVGStrokes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401EDFB6C9F9DBEC6CAB4882 /* SVGStrokes.swift */; };
 		E53CC37A4E56B79482D7DF06 /* CanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF9CA4D0417B10AB050A75C /* CanvasView.swift */; };
 		F46F312ACC0231AE1B90D727 /* TurnRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF502298A2C010FE66163AF /* TurnRenderer.swift */; };
 /* End PBXBuildFile section */
@@ -22,6 +23,7 @@
 		1DA319B7A0ABEA2F42EEF6E4 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		39EF633D5F393E123E6361C1 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		3BF502298A2C010FE66163AF /* TurnRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnRenderer.swift; sourceTree = "<group>"; };
+		401EDFB6C9F9DBEC6CAB4882 /* SVGStrokes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGStrokes.swift; sourceTree = "<group>"; };
 		4CD656CBA4190A5C2B4F7BDC /* BoardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardStore.swift; sourceTree = "<group>"; };
 		74A1C02BC436487CB30DCB62 /* Sketchpad.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Sketchpad.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8AF9CA4D0417B10AB050A75C /* CanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasView.swift; sourceTree = "<group>"; };
@@ -47,6 +49,7 @@
 				174F5814B810E56DBB486170 /* ServerConnection.swift */,
 				39EF633D5F393E123E6361C1 /* Settings.swift */,
 				C43E4564781061F22876585D /* SketchpadApp.swift */,
+				401EDFB6C9F9DBEC6CAB4882 /* SVGStrokes.swift */,
 				3BF502298A2C010FE66163AF /* TurnRenderer.swift */,
 			);
 			path = Sketchpad;
@@ -122,6 +125,7 @@
 				1985DD87C3393755EB3DDFF7 /* BoardStore.swift in Sources */,
 				E53CC37A4E56B79482D7DF06 /* CanvasView.swift in Sources */,
 				79AC6DE959935BB91DF11E79 /* ContentView.swift in Sources */,
+				928B7AA06CE142B39FA641B5 /* SVGStrokes.swift in Sources */,
 				52623790AF8980281682BF31 /* ServerConnection.swift in Sources */,
 				5344DA013F11F6A0BF374138 /* Settings.swift in Sources */,
 				014CFF24BCFBA3637A3CF605 /* SketchpadApp.swift in Sources */,

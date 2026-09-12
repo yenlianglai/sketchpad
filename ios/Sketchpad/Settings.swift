@@ -13,7 +13,8 @@ final class Settings: ObservableObject {
     @Published var pencilOnly: Bool { didSet { d.set(pencilOnly, forKey: "pencilOnly") } }
     /// Fade previously-sent strokes to grey in the image so the agent sees what is new.
     @Published var highlightNewStrokes: Bool { didSet { d.set(highlightNewStrokes, forKey: "diff") } }
-    @Published var speakReplies: Bool { didSet { d.set(speakReplies, forKey: "tts") } }
+    /// Put SVG the agent draws back onto the canvas as editable strokes automatically.
+    @Published var autoPlaceAgentDrawing: Bool { didSet { d.set(autoPlaceAgentDrawing, forKey: "autoPlace") } }
     @Published var pencilDoubleTapSends: Bool { didSet { d.set(pencilDoubleTapSends, forKey: "dtSend") } }
 
     init() {
@@ -27,7 +28,7 @@ final class Settings: ObservableObject {
         autoSendSeconds = d.object(forKey: "autoSend") as? Double ?? 0
         pencilOnly = d.object(forKey: "pencilOnly") as? Bool ?? true
         highlightNewStrokes = d.object(forKey: "diff") as? Bool ?? true
-        speakReplies = d.object(forKey: "tts") as? Bool ?? true
+        autoPlaceAgentDrawing = d.object(forKey: "autoPlace") as? Bool ?? true
         pencilDoubleTapSends = d.object(forKey: "dtSend") as? Bool ?? false
     }
 }

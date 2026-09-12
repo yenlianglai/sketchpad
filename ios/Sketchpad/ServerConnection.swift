@@ -11,6 +11,8 @@ struct ChatItem: Identifiable {
     var image: UIImage? = nil
     var svg: String? = nil
     var imageURL: URL? = nil
+    /// The turn this reply answers (its image is the coordinate space of `svg`).
+    var turnId: String? = nil
     let time = Date()
 }
 
@@ -154,6 +156,7 @@ final class ServerConnection: NSObject, ObservableObject {
             agentReady = (m["ready"] as? Bool) ?? (m["mcp"] as? Bool) ?? false
         case "reply":
             var item = ChatItem(role: .agent, text: m["text"] as? String ?? "")
+            item.turnId = m["turnId"] as? String
             if let files = m["files"] as? [[String: Any]] {
                 for f in files {
                     guard let url = f["url"] as? String else { continue }

@@ -1,7 +1,9 @@
 import SwiftUI
 import PencilKit
-import AVFoundation
 import WebKit
+
+/// Where a sent image sits on the canvas, so agent SVG drawn in that image's pixel space lands in place.
+struct TurnMapping { let bounds: CGRect; let scale: CGFloat; let imageSize: CGSize }
 
 struct ContentView: View {
     @EnvironmentObject var settings: Settings
@@ -17,8 +19,9 @@ struct ContentView: View {
     @State private var sending = false
     @State private var flash: String?
     @State private var autoSendTask: Task<Void, Never>?
-    @State private var speaker = AVSpeechSynthesizer()
     @State private var loadedBoardID: UUID?
+    @State private var turnMappings: [String: TurnMapping] = [:]
+    @State private var lastTurnId: String?
 
     private var newStrokeCount: Int { max(0, drawing.strokes.count - store.current.sentStrokeCount) }
 
@@ -39,14 +42,14 @@ struct ContentView: View {
             }
             if showPanel {
                 Divider()
-                SidePanel(items: conn.items).frame(width: 340)
+                SidePanel(items: conn.items, onPlace: { placeAgentDrawing($0, announce: true) }).frame(width: 340)
             }
         }
         .onAppear(perform: loadCurrentBoard)
         .onChange(of: store.currentID) { _, _ in loadCurrentBoard() }
         .onAppear {
             conn.snapshotProvider = { TurnRenderer.render(drawing, sentStrokeCount: 0, highlightNew: false)?.png }
-            conn.onReply = { item in if settings.speakReplies, !item.text.isEmpty { speak(item.text) } }
+            conn.onReply = { item in if settings.autoPlaceAgentDrawing, item.svg != nil { placeAgentDrawing(item, announce: true) } }
         }
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(settings).environmentObject(conn) }
         .sheet(isPresented: $showPages) { PagesView().environmentObject(store) }
@@ -142,7 +145,11 @@ struct ContentView: View {
         defer { sending = false }
         do {
             let png = rendered?.png ?? Data()
-            _ = try await conn.sendTurn(png: png, text: text, newStrokes: newStrokeCount)
+            let turnId = try await conn.sendTurn(png: png, text: text, newStrokes: newStrokeCount)
+            if let r = rendered {
+                turnMappings[turnId] = TurnMapping(bounds: r.bounds, scale: r.scale, imageSize: CGSize(width: r.bounds.width * r.scale, height: r.bounds.height * r.scale))
+                lastTurnId = turnId
+            }
             conn.items.append(ChatItem(role: .user, text: text.isEmpty ? "（圖）" : text, image: rendered?.image))
             var b = store.current
             b.sentStrokeCount = drawing.strokes.count
@@ -160,12 +167,26 @@ struct ContentView: View {
         Task { try? await Task.sleep(nanoseconds: 1_800_000_000); if flash == s { flash = nil } }
     }
 
-    private func speak(_ text: String) {
-        speaker.stopSpeaking(at: .immediate)
-        let u = AVSpeechUtterance(string: text)
-        u.voice = AVSpeechSynthesisVoice(language: "zh-TW")
-        u.rate = AVSpeechUtteranceDefaultSpeechRate * 1.05
-        speaker.speak(u)
+    /// Convert the agent's SVG into pen strokes and add them to the current page, aligned with the image it answered.
+    private func placeAgentDrawing(_ item: ChatItem, announce: Bool) {
+        guard let svg = item.svg else { return }
+        let mapping: SVGStrokeMapping
+        if let id = item.turnId ?? lastTurnId, let m = turnMappings[id] {
+            mapping = SVGStrokeMapping(origin: m.bounds.origin, pixelsPerPoint: m.scale, viewBox: nil, imageSize: m.imageSize)
+        } else {
+            // No known image space: drop it near the top-left of what is currently visible.
+            let visible = canvasController.canvas.map { CGRect(origin: $0.contentOffset, size: $0.bounds.size) } ?? CGRect(x: 0, y: 0, width: 800, height: 600)
+            mapping = SVGStrokeMapping(origin: CGPoint(x: visible.minX + 40, y: visible.minY + 120), pixelsPerPoint: 1, viewBox: nil, imageSize: .zero)
+        }
+        let strokes = SVGStrokes.strokes(from: svg, mapping: mapping, defaultColor: UIColor(red: 0.78, green: 0.33, blue: 0.17, alpha: 1))
+        guard !strokes.isEmpty else { if announce { showFlash("agent 的圖沒有可轉成筆跡的線條") }; return }
+        let before = drawing
+        drawing.append(PKDrawing(strokes: strokes))
+        strokesChanged()
+        canvasController.canvas?.undoManager?.registerUndo(withTarget: canvasController) { _ in
+            Task { @MainActor in self.drawing = before; self.strokesChanged() }
+        }
+        if announce { showFlash("agent 畫了 \(strokes.count) 筆，可以直接改") }
     }
 }
 
@@ -173,6 +194,7 @@ struct ContentView: View {
 
 struct SidePanel: View {
     let items: [ChatItem]
+    var onPlace: (ChatItem) -> Void
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -181,7 +203,7 @@ struct SidePanel: View {
                     if items.isEmpty {
                         Text("畫點東西，按送出。agent 的回覆會出現在這裡。").font(.callout).foregroundStyle(.secondary)
                     }
-                    ForEach(items) { item in ChatBubble(item: item).id(item.id) }
+                    ForEach(items) { item in ChatBubble(item: item, onPlace: onPlace).id(item.id) }
                 }
                 .padding(.horizontal, 14).padding(.bottom, 20)
             }
@@ -193,6 +215,7 @@ struct SidePanel: View {
 
 struct ChatBubble: View {
     let item: ChatItem
+    var onPlace: (ChatItem) -> Void
     var body: some View {
         switch item.role {
         case .system:
@@ -207,7 +230,10 @@ struct ChatBubble: View {
         case .agent:
             VStack(alignment: .leading, spacing: 8) {
                 if !item.text.isEmpty { Text(item.text).textSelection(.enabled) }
-                if let svg = item.svg { SVGView(svg: svg).frame(height: 200).clipShape(RoundedRectangle(cornerRadius: 8)) }
+                if let svg = item.svg {
+                    SVGView(svg: svg).frame(height: 200).clipShape(RoundedRectangle(cornerRadius: 8))
+                    Button { onPlace(item) } label: { Label("再畫到畫布", systemImage: "pencil.and.outline") }.buttonStyle(.bordered).controlSize(.small)
+                }
                 if let url = item.imageURL { AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { ProgressView() }.frame(maxHeight: 200) }
             }
             .padding(12).background(Color(red: 1, green: 0.96, blue: 0.93), in: RoundedRectangle(cornerRadius: 12))
@@ -295,7 +321,7 @@ struct SettingsView: View {
                     }
                 }
                 Section("回覆") {
-                    Toggle("朗讀 agent 回覆", isOn: $settings.speakReplies)
+                    Toggle("agent 畫的圖自動放到畫布（可編輯筆跡）", isOn: $settings.autoPlaceAgentDrawing)
                 }
             }
             .navigationTitle("設定")
