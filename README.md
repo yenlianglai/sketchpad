@@ -35,8 +35,10 @@ npm install
 npm run cert          # 產生 certs/server.crt，SAN 含 localhost 與 Mac 的 en0 IP
 ```
 
-把 `certs/server.crt` AirDrop 到 iPad → 設定 › 一般 › VPN 與裝置管理 › 安裝描述檔 →
-設定 › 一般 › 關於本機 › 憑證信任設定 › 開啟完全信任。
+憑證存在時，server 會多開一個純 http 的安裝頁在 **port+1**（預設 8791）。iPad Safari 開
+`http://<Mac IP>:8791/`，照頁面三步：下載憑證 → 設定 › 一般 › VPN 與裝置管理 › 安裝 →
+設定 › 一般 › 關於本機 › 憑證信任設定 › 開啟 `sketchpad` 完全信任。
+（不想走這條也可以 AirDrop `certs/server.crt` 過去。）
 （有 Tailscale 的話改用 `tailscale cert` 更省事，把 key/crt 放進 `certs/` 即可。）
 
 ## 啟動

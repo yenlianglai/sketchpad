@@ -15,6 +15,7 @@ import { createServer as createHttpsServer } from 'node:https'
 import { join, dirname, basename, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
+import { networkInterfaces } from 'node:os'
 import { WebSocketServer } from 'ws'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -208,6 +209,12 @@ async function handle(req, res) {
 }
 
 const tls = existsSync(join(CERT_DIR, 'server.key')) && existsSync(join(CERT_DIR, 'server.crt'))
+const HOST_HINT = process.env.SKETCH_HOST || lanIp()
+function lanIp() {
+  for (const addrs of Object.values(networkInterfaces()))
+    for (const a of addrs ?? []) if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254')) return a.address
+  return 'localhost'
+}
 const httpServer = tls
   ? createHttpsServer({ key: readFileSync(join(CERT_DIR, 'server.key')), cert: readFileSync(join(CERT_DIR, 'server.crt')) }, handle)
   : createHttpServer(handle)
@@ -222,6 +229,31 @@ httpServer.on('upgrade', (req, socket, head) => {
     ws.on('close', () => sockets.delete(ws))
   })
 })
+
+// When TLS is on, also serve the certificate over plain http on PORT+1 so the iPad can
+// install it straight from Safari instead of via AirDrop.
+if (tls) {
+  const certPage = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Install certificate</title>
+<style>body{font:17px/1.5 -apple-system,system-ui;max-width:560px;margin:40px auto;padding:0 20px;color:#1a1a1a}
+a.btn{display:block;text-align:center;background:#1a1a1a;color:#fff;padding:14px;border-radius:12px;text-decoration:none;font-weight:600;margin:20px 0}
+ol li{margin:8px 0}code{background:#eee;padding:2px 6px;border-radius:4px}</style>
+<h1>Sketch + Voice 憑證安裝</h1>
+<a class="btn" href="/sketchpad.crt">1. 下載憑證</a>
+<ol>
+<li>Safari 會問「是否允許下載設定描述檔」→ <b>允許</b></li>
+<li>設定 › 一般 › VPN 與裝置管理 › <b>已下載的描述檔</b> › 安裝</li>
+<li>設定 › 一般 › 關於本機 › <b>憑證信任設定</b> › 把 <code>sketchpad</code> 開啟</li>
+<li>回 Safari 開 <a href="https://${HOST_HINT}:${PORT}/${TOKEN ? '?token=…' : ''}">https://${HOST_HINT}:${PORT}/</a></li>
+</ol>`
+  createHttpServer((req, res) => {
+    if (req.url.startsWith('/sketchpad.crt')) {
+      res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="sketchpad.crt"' })
+      return res.end(readFileSync(join(CERT_DIR, 'server.crt')))
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(certPage)
+  }).listen(PORT + 1, '0.0.0.0', () => log(`cert install page on http://${HOST_HINT}:${PORT + 1}/  (open this on the iPad first)`))
+}
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   log(`web UI on ${tls ? 'https' : 'http'}://0.0.0.0:${PORT}${TOKEN ? '/?token=***' : ''}  (tls=${tls}, driver=${DRIVER}, cwd=${WORK_DIR})`)
