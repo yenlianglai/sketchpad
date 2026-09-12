@@ -82,6 +82,37 @@ npm run test:mcp
 - 未實作 permission relay：Claude 在 session 卡 permission prompt 時，要回 Mac 按。可在 server 加 `claude/channel/permission` capability 轉發到 iPad。
 - `--dangerously-load-development-channels` 是 preview 期間的 flag，語法可能變。
 
+## iPad 原生 app（純手寫板，PencilKit）
+
+`ios/` 是 SwiftUI + PencilKit 的 iPad app，取代網頁版：沒有語音、沒有憑證、Bonjour 自動找到 Mac。
+
+- 系統 PencilKit 工具列：筆、鉛筆、螢光筆、橡皮、套索、尺、色盤；Pencil 壓感與傾斜；雙指縮放的大畫布。
+- 多頁畫板，自動存檔。
+- 送出時把**上次已送過的筆跡淡成灰色、新筆跡保留原色**，agent 一眼看出新增的部分（可關）。
+- 回合切分三選一：按送出、Pencil 雙擊、停筆 N 秒自動送出。
+- 底部文字欄支援 Scribble：用 Pencil 寫字直接變成註解文字一起送。
+- 右側面板顯示 agent 回覆（文字、SVG、圖），可朗讀。
+
+需求：Xcode 26、iPadOS 17+。專案用 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 產生：
+
+```bash
+brew install xcodegen
+cd ios && xcodegen generate && open Sketchpad.xcodeproj
+```
+
+裝到自己的 iPad：Xcode 裡選 Sketchpad target › Signing & Capabilities › Team 選你的 Apple ID（免費帳號可，7 天要重簽），
+接上 iPad 按 Run。第一次 iPad 會問「允許尋找區域網路裝置」，要允許，Bonjour 才找得到 Mac。
+
+Mac 端一樣 `npm run web-only`。app 對 Mac 走 **8791 純 http**（`NSAllowsLocalNetworking`），不需要憑證；
+沒被自動找到時到設定手動填 `IP:8791`。模擬器版預設連 `127.0.0.1:8791`。
+
+模擬器編譯（不需要 `sudo xcode-select`，用 `DEVELOPER_DIR` 即可）：
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project ios/Sketchpad.xcodeproj -scheme Sketchpad \
+  -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -derivedDataPath ios/build build CODE_SIGNING_ALLOWED=NO
+```
+
 ## iPad 當外接手寫板：Sketchpad MCP（推薦）
 
 server 同時是一個**標準 MCP server**（Streamable HTTP，`http://localhost:8791/mcp`）。

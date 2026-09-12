@@ -15,7 +15,8 @@ import { createServer as createHttpsServer } from 'node:https'
 import { join, dirname, basename, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
-import { networkInterfaces } from 'node:os'
+import { networkInterfaces, hostname } from 'node:os'
+import { spawn } from 'node:child_process'
 import { WebSocketServer } from 'ws'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -245,7 +246,7 @@ const httpServer = tls
   : createHttpServer(handle)
 
 const wss = new WebSocketServer({ noServer: true })
-httpServer.on('upgrade', (req, socket, head) => {
+function upgrade(req, socket, head) {
   const url = new URL(req.url, 'http://x')
   if (url.pathname !== '/ws' || !authorized(url)) { socket.destroy(); return }
   wss.handleUpgrade(req, socket, head, ws => {
@@ -253,7 +254,8 @@ httpServer.on('upgrade', (req, socket, head) => {
     ws.send(JSON.stringify({ type: 'hello', mcp: mcpReady, tls, mode: DRIVER, sessionId: headless?.sessionId }))
     ws.on('close', () => sockets.delete(ws))
   })
-})
+}
+httpServer.on('upgrade', upgrade)
 
 // Plain http on PORT+1: the MCP endpoint for agents on this machine (http://localhost:PORT+1/mcp),
 // and, when TLS is on, the certificate so the iPad can install it straight from Safari.
@@ -271,22 +273,36 @@ ol li{margin:8px 0}code{background:#eee;padding:2px 6px;border-radius:4px}</styl
 <li>設定 › 一般 › 關於本機 › <b>憑證信任設定</b> › 把 <code>sketchpad</code> 開啟</li>
 <li>回 Safari 開 <a href="https://${HOST_HINT}:${PORT}/${TOKEN ? '?token=…' : ''}">https://${HOST_HINT}:${PORT}/</a></li>
 </ol>`
-  createHttpServer(async (req, res) => {
+  // The plain listener serves everything the TLS one does (the native iPad app talks to it over
+  // local http, no certificate needed) plus the cert page for the web UI's benefit.
+  const plain = createHttpServer(async (req, res) => {
     const url = new URL(req.url, 'http://x')
-    if (url.pathname === '/mcp') {
-      if (!authorized(url)) return send(res, 401, 'bad token')
-      return handleMcp(req, res).catch(err => { log('mcp error', err.message); if (!res.headersSent) send(res, 500, err.message) })
-    }
     if (tls && url.pathname.startsWith('/sketchpad.crt')) {
       res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="sketchpad.crt"' })
       return res.end(readFileSync(join(CERT_DIR, 'server.crt')))
     }
-    if (!tls) return send(res, 200, `sketchpad MCP endpoint: /mcp\nweb UI: http://${HOST_HINT}:${PORT}/ (no TLS; run npm run cert for iPad mic)`)
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(certPage)
-  }).listen(PORT + 1, '0.0.0.0', () => {
-    log(`MCP endpoint (Streamable HTTP): http://localhost:${PORT + 1}/mcp${TOKEN ? '?token=***' : ''}`)
-    if (tls) log(`cert install page on http://${HOST_HINT}:${PORT + 1}/  (open this on the iPad first)`)
+    if (tls && url.pathname === '/cert') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end(certPage) }
+    return handle(req, res)
   })
+  plain.on('upgrade', upgrade)
+  plain.listen(PORT + 1, '0.0.0.0', () => {
+    log(`MCP endpoint (Streamable HTTP): http://localhost:${PORT + 1}/mcp${TOKEN ? '?token=***' : ''}`)
+    log(`iPad app / plain http: http://${HOST_HINT}:${PORT + 1}/`)
+    if (tls) log(`cert install page for the web UI: http://${HOST_HINT}:${PORT + 1}/cert`)
+    advertiseBonjour(PORT + 1)
+  })
+}
+
+// Bonjour so the iPad app finds this Mac without typing an IP. Uses macOS's dns-sd; no deps.
+function advertiseBonjour(port) {
+  if (process.platform !== 'darwin' || process.env.SKETCH_NO_BONJOUR) return
+  const name = process.env.SKETCH_NAME || `Sketchpad on ${hostname().replace(/\.local$/, '')}`
+  const child = spawn('dns-sd', ['-R', name, '_sketchpad._tcp', '.', String(port), 'path=/', `tls=0`], { stdio: 'ignore' })
+  child.on('error', err => log('bonjour unavailable:', err.message))
+  child.on('exit', code => { if (code) log('dns-sd exited', code) })
+  const stop = () => { try { child.kill() } catch {} }
+  process.on('exit', stop); process.on('SIGINT', () => { stop(); process.exit(0) }); process.on('SIGTERM', () => { stop(); process.exit(0) })
+  log(`bonjour: advertising "${name}" as _sketchpad._tcp on ${port}`)
 }
 
 httpServer.listen(PORT, '0.0.0.0', () => {
