@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var previewTurn: Turn?
     @State private var selectedLayerID: UUID?
+    @State private var layerMode = false
     @State private var sending = false
     @State private var flash: String?
     @State private var autoSendTask: Task<Void, Never>?
@@ -34,11 +35,17 @@ struct ContentView: View {
                        onPencilDoubleTap: settings.pencilDoubleTapSends ? { Task { await send() } } : nil)
                 .ignoresSafeArea()
 
+            if layerMode {
+                LayerModeOverlay(layers: store.current.layers, selectedID: $selectedLayerID, controller: canvasController, onChange: { store.updateLayer($0) })
+                    .padding(.trailing, rightInset)
+            }
             if let id = selectedLayerID, let layer = store.current.layers.first(where: { $0.id == id }) {
                 LayerOverlay(layer: layer, controller: canvasController,
                              onChange: { store.updateLayer($0) },
                              onDelete: { store.removeLayer(id); selectedLayerID = nil },
-                             onDone: { selectedLayerID = nil })
+                             onDone: { selectedLayerID = nil; if store.current.layers.isEmpty { setLayerMode(false) } },
+                             onToFront: { var b = store.current; if let i = b.layers.firstIndex(where: { $0.id == id }) { let l = b.layers.remove(at: i); b.layers.append(l); store.current = b } },
+                             onToBack: { var b = store.current; if let i = b.layers.firstIndex(where: { $0.id == id }) { let l = b.layers.remove(at: i); b.layers.insert(l, at: 0); store.current = b } })
                     .padding(.trailing, rightInset)
             }
 
@@ -70,7 +77,9 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: flash)
         .onAppear { loadCurrentBoard(); wireEvents() }
         .onChange(of: store.currentID) { _, _ in selectedLayerID = nil; loadCurrentBoard() }
-        .onChange(of: canvasController.isDrawing) { _, drawing in canvasController.setToolPickerVisible(!(drawing && settings.autoHideChrome)) }
+        .onChange(of: canvasController.isDrawing) { _, drawing in if !layerMode { canvasController.setToolPickerVisible(!(drawing && settings.autoHideChrome)) } }
+        .onChange(of: showDrawer) { _, _ in if !layerMode && !canvasController.isDrawing { canvasController.setToolPickerVisible(true) } }
+        .onChange(of: showSettings) { _, shown in if !shown && !layerMode { canvasController.setToolPickerVisible(true) } }
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(settings).environmentObject(conn) }
         .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }
     }
@@ -96,8 +105,29 @@ struct ContentView: View {
             .buttonStyle(.plain)
             chromeButton("arrow.uturn.backward") { canvasController.undo() }
             chromeButton("arrow.uturn.forward") { canvasController.redo() }
+            if !store.current.layers.isEmpty || layerMode {
+                Button { setLayerMode(!layerMode) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.on.square.dashed").font(.body.weight(.medium))
+                        Text(layerMode ? "Layers · done" : "Layers").font(.subheadline.weight(.semibold))
+                    }
+                    .padding(.horizontal, 16).frame(height: 44)
+                    .background(layerMode ? Color.primary : Color.clear, in: Capsule())
+                    .background(.thinMaterial, in: Capsule())
+                    .foregroundStyle(layerMode ? Color(uiColor: .systemBackground) : .primary)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.leading, 20).padding(.top, 20)
+    }
+
+    private func setLayerMode(_ on: Bool) {
+        layerMode = on
+        canvasController.isDrawing = false
+        canvasController.setDrawingEnabled(!on)
+        if !on { selectedLayerID = nil }
+        else if selectedLayerID == nil, let last = store.current.layers.last { selectedLayerID = last.id }
     }
 
     private var statusText: String {
@@ -329,8 +359,9 @@ struct ContentView: View {
         if !drawing.strokes.isEmpty, drawing.bounds.maxY + 40 + h < visible.maxY { origin = CGPoint(x: max(visible.minX + 20, drawing.bounds.minX), y: drawing.bounds.maxY + 40) }
         guard let layer = store.addLayer(fromAgentFile: file, kind: item.kind, turnId: turn.id, frame: CGRect(origin: origin, size: CGSize(width: w, height: h))) else { return }
         store.update(turn.id) { t in if let i = t.agentItems.firstIndex(where: { $0.id == item.id }) { t.agentItems[i].placedAsLayer = true } }
+        setLayerMode(true)
         selectedLayerID = layer.id
-        showFlash("\(item.kind) placed as a layer — drag to move, corners to resize")
+        showFlash("\(item.kind) placed — drag to move, pinch or corners to resize, tap Layers · done to draw")
     }
 
     private func branch(_ t: Turn) {

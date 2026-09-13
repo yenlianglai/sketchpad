@@ -19,6 +19,7 @@
 		E2C3A299941BD2C557137CD5 /* LayerOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */; };
 		E53CC37A4E56B79482D7DF06 /* CanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF9CA4D0417B10AB050A75C /* CanvasView.swift */; };
 		F46F312ACC0231AE1B90D727 /* TurnRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF502298A2C010FE66163AF /* TurnRenderer.swift */; };
+		FBA455FBE54A2E53C7AACE7D /* LayerModeOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B4C7EF300C5CE855CAF200 /* LayerModeOverlay.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerOverlay.swift; sourceTree = "<group>"; };
 		BE399589066DF03F9B44CBC3 /* DrawerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerViews.swift; sourceTree = "<group>"; };
 		C43E4564781061F22876585D /* SketchpadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SketchpadApp.swift; sourceTree = "<group>"; };
+		D4B4C7EF300C5CE855CAF200 /* LayerModeOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerModeOverlay.swift; sourceTree = "<group>"; };
 		F0C86C586FA2411F65CCBCE7 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -56,6 +58,7 @@
 				BE399589066DF03F9B44CBC3 /* DrawerViews.swift */,
 				04AF8DE57C88945B96C97F14 /* Info.plist */,
 				514EFB18FF2E83CD66251213 /* LayerHostView.swift */,
+				D4B4C7EF300C5CE855CAF200 /* LayerModeOverlay.swift */,
 				ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */,
 				F0C86C586FA2411F65CCBCE7 /* Models.swift */,
 				174F5814B810E56DBB486170 /* ServerConnection.swift */,
@@ -139,6 +142,7 @@
 				79AC6DE959935BB91DF11E79 /* ContentView.swift in Sources */,
 				09240145A13A299278D6D530 /* DrawerViews.swift in Sources */,
 				7F84624131C533373F710CD2 /* LayerHostView.swift in Sources */,
+				FBA455FBE54A2E53C7AACE7D /* LayerModeOverlay.swift in Sources */,
 				E2C3A299941BD2C557137CD5 /* LayerOverlay.swift in Sources */,
 				3367A50B00011648EBE2EF91 /* Models.swift in Sources */,
 				928B7AA06CE142B39FA641B5 /* SVGStrokes.swift in Sources */,

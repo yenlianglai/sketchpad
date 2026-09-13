@@ -7,6 +7,8 @@ struct LayerOverlay: View {
     var onChange: (Layer) -> Void
     var onDelete: () -> Void
     var onDone: () -> Void
+    var onToFront: () -> Void = {}
+    var onToBack: () -> Void = {}
 
     @State private var startFrame: CGRect?
 
@@ -37,6 +39,8 @@ struct LayerOverlay: View {
                 Text("\(layer.kind) layer").font(.caption.weight(.semibold))
                 Divider().frame(height: 14)
                 Button { var l = layer; l.locked.toggle(); onChange(l) } label: { Image(systemName: layer.locked ? "lock.fill" : "lock.open") }
+                Button { onToFront() } label: { Image(systemName: "square.3.layers.3d.top.filled") }
+                Button { onToBack() } label: { Image(systemName: "square.3.layers.3d.bottom.filled") }
                 Button(role: .destructive) { onDelete() } label: { Image(systemName: "trash") }
                 Button { onDone() } label: { Text("Done").font(.caption.weight(.semibold)) }
             }

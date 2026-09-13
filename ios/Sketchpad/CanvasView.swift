@@ -23,9 +23,26 @@ final class CanvasController: ObservableObject {
             isDrawing = false
         }
     }
+    /// PKToolPicker only shows for the current first responder; tapping any SwiftUI control steals it
+    /// from the canvas, so always hand it back before showing.
     func setToolPickerVisible(_ v: Bool) {
         guard let canvas else { return }
         toolPicker.setVisible(v, forFirstResponder: canvas)
+        if v {
+            if !canvas.isFirstResponder { canvas.becomeFirstResponder() }
+            DispatchQueue.main.async { [weak self, weak canvas] in
+                guard let self, let canvas else { return }
+                if !canvas.isFirstResponder { canvas.becomeFirstResponder() }
+                self.toolPicker.setVisible(true, forFirstResponder: canvas)
+            }
+        }
+    }
+    /// Layer mode: the pencil stops drawing; the overlay above handles pan/zoom/layers.
+    func setDrawingEnabled(_ enabled: Bool) {
+        guard let canvas else { return }
+        canvas.drawingGestureRecognizer.isEnabled = enabled
+        canvas.isScrollEnabled = enabled
+        setToolPickerVisible(enabled)
     }
     /// Canvas point → view point (for overlays).
     func viewRect(for canvasRect: CGRect) -> CGRect {
