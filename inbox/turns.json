@@ -1,0 +1,26 @@
+[
+ {
+  "turnId": "5a3a3b11",
+  "boardId": "B1",
+  "boardTitle": "Flow",
+  "ts": 1789305800045,
+  "text": "make this a login form",
+  "strokes": 4,
+  "pngPath": "/Users/ryanlai/code/sketchpad/inbox/2026-09-13T13-23-20-044Z-5a3a3b11.png",
+  "replies": [
+   {
+    "id": "e419a59c-db44-4b5d-9802-064a2326c801",
+    "turnId": "5a3a3b11",
+    "text": "Account, password, a button.",
+    "files": [
+     {
+      "url": "data:image/svg+xml;base64,PHN2Zz48cmVjdC8+PC9zdmc+",
+      "name": "drawing.svg",
+      "kind": "sketch"
+     }
+    ],
+    "ts": 1789305800061
+   }
+  ]
+ }
+]

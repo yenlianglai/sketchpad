@@ -1,9 +1,9 @@
 import { test, describe, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createState, pngSize, LISTEN_GRACE_MS } from '../server/state.mjs'
+import { createState, pngSize, LISTEN_GRACE_MS, SPOOL_TTL_MS } from '../server/state.mjs'
 
 describe('state', () => {
   let dir, sent, clients, state
@@ -11,8 +11,7 @@ describe('state', () => {
   const make = (opts = {}) => createState({
     broadcast: m => sent.push(m),
     clientCount: () => clients,
-    inboxDir: dir,
-    outboxDir: join(dir, 'out'),
+    spoolDir: dir,
     ...opts
   })
 
@@ -76,92 +75,79 @@ describe('state', () => {
     })
   })
 
-  describe('the manifest', () => {
-    test('records a page and survives a restart', () => {
-      state.pushTurn(page('f', { boardId: 'B', boardTitle: 'Flow', pngPath: '/tmp/f.png' }))
-      const reloaded = make()
-      const [row] = reloaded.listTurns({ boardId: 'all' })
-      assert.equal(row.turnId, 'f')
-      assert.equal(row.boardTitle, 'Flow')
-      assert.deepEqual(row.replies, [])
-    })
-
-    test('a corrupt manifest costs history, not the ability to draw', () => {
-      writeFileSync(join(dir, 'turns.json'), 'not json at all')
-      const s = make()
-      assert.deepEqual(s.listTurns({ boardId: 'all' }), [])
-      s.pushTurn(page('g'))
-      assert.equal(s.listTurns({ boardId: 'all' }).length, 1)
-    })
-
-    test('lists newest first, and defaults to the page the iPad has open', () => {
-      state.pushTurn(page('h', { boardId: 'B1', ts: 1 }))
-      state.pushTurn(page('i', { boardId: 'B1', ts: 2 }))
-      state.pushTurn(page('j', { boardId: 'B2', ts: 3 }))     // switches the current page
-      assert.deepEqual(state.listTurns().map(t => t.turnId), ['j'])
-      assert.deepEqual(state.listTurns({ boardId: 'all' }).map(t => t.turnId), ['j', 'i', 'h'])
-      assert.deepEqual(state.listTurns({ boardId: 'B1' }).map(t => t.turnId), ['i', 'h'])
-    })
-
-    test('getTurn finds one by id and nothing for an unknown one', () => {
-      state.pushTurn(page('k'))
-      assert.equal(state.getTurn('k').turnId, 'k')
-      assert.equal(state.getTurn('nope'), null)
-    })
-  })
-
-  describe('replies', () => {
-    test('attach to their page, and to the latest when the id is unknown', () => {
-      state.pushTurn(page('l'))
-      state.recordReply('l', { id: 'r1', text: 'on l', files: [], ts: 10 })
-      state.recordReply('gone', { id: 'r2', text: 'no such page', files: [], ts: 20 })
-      assert.deepEqual(state.getTurn('l').replies.map(r => r.id), ['r1', 'r2'])
-    })
-
-    test('replay returns only what came after, oldest first', () => {
-      state.pushTurn(page('m'))
-      for (const [id, ts] of [['r1', 10], ['r2', 20], ['r3', 30]]) {
-        state.recordReply('m', { id, text: id, files: [], ts })
-      }
-      assert.deepEqual(state.recentReplies(15).map(r => r.id), ['r2', 'r3'])
-      assert.deepEqual(state.recentReplies(0).map(r => r.id), ['r1', 'r2', 'r3'])
-      assert.deepEqual(state.recentReplies(99), [])
-    })
-
-    test('a replayed reply still says which page it belongs to', () => {
-      state.pushTurn(page('n'))
-      state.recordReply('n', { id: 'r', text: '', files: [], ts: 5 })
-      assert.equal(state.recentReplies(0)[0].turnId, 'n')
-    })
-  })
-
-  describe('snapshots', () => {
-    test('ask, then answer', async () => {
-      const asked = state.requestSnapshot(500)
-      const request = sent.find(m => m.type === 'snapshot_request')
-      assert.ok(request, 'the iPad should have been asked')
-      state.resolveSnapshot(request.id, 'AAAA')
-      assert.equal(await asked, 'AAAA')
+  describe('asking the iPad', () => {
+    test('the question goes out and the answer comes back', async () => {
+      const asked = state.listTurns({ boardId: 'all' })
+      const question = sent.find(m => m.type === 'ask' && m.kind === 'list_turns')
+      assert.ok(question, 'the iPad should have been asked')
+      state.answer(question.id, { turns: [{ turnId: 'f', boardTitle: 'Flow' }] })
+      assert.deepEqual((await asked).map(t => t.turnId), ['f'])
     })
 
     test('no iPad connected resolves immediately rather than hanging', async () => {
       clients = 0
       assert.equal(await state.requestSnapshot(5000), null)
+      assert.equal(await state.listTurns(), null)
+      assert.equal(sent.filter(m => m.type === 'ask').length, 0)
     })
 
-    test('an unanswered request gives up', async () => {
+    test('an unanswered question gives up', async () => {
       assert.equal(await state.requestSnapshot(30), null)
+    })
+
+    test('a snapshot is just another question', async () => {
+      const asked = state.requestSnapshot(500)
+      const question = sent.find(m => m.type === 'ask' && m.kind === 'canvas')
+      state.answer(question.id, { png: 'AAAA' })
+      assert.equal((await asked).png, 'AAAA')
+    })
+
+    test('the server keeps no history of its own', () => {
+      state.pushTurn(page('f', { boardId: 'B', boardTitle: 'Flow' }))
+      assert.deepEqual(readdirSync(dir).filter(n => n.endsWith('.json') && n !== 'undelivered.json'), [])
+    })
+  })
+
+  describe('replies waiting for the iPad', () => {
+    // Timestamps are real milliseconds, because anything older than a day is pruned.
+    const at = n => Date.now() - (4 - n) * 1000
+
+    test('replay returns only what came after, oldest first', () => {
+      for (const id of ['r1', 'r2', 'r3']) {
+        state.recordReply({ id, turnId: 'm', text: id, files: [], ts: at(Number(id[1])) })
+      }
+      assert.deepEqual(state.repliesSince(at(1) + 1).map(r => r.id), ['r2', 'r3'])
+      assert.deepEqual(state.repliesSince(0).map(r => r.id), ['r1', 'r2', 'r3'])
+      assert.deepEqual(state.repliesSince(Date.now() + 1000), [])
+    })
+
+    test('a replayed reply still says which page it belongs to', () => {
+      state.recordReply({ id: 'r', turnId: 'n', text: '', files: [], ts: Date.now() })
+      assert.equal(state.repliesSince(0)[0].turnId, 'n')
+    })
+
+    test('survive a restart, so a reply sent to a sleeping iPad is not lost', () => {
+      state.recordReply({ id: 'r', turnId: 'n', text: 'later', files: [], ts: Date.now() })
+      assert.deepEqual(make().repliesSince(0).map(r => r.id), ['r'])
+    })
+
+    test('are dropped once the iPad has had a day to collect them', () => {
+      let clock = 10 * SPOOL_TTL_MS
+      const s = make({ now: () => clock })
+      s.recordReply({ id: 'old', turnId: 'n', text: '', files: [], ts: clock })
+      clock += SPOOL_TTL_MS + 1
+      assert.deepEqual(s.repliesSince(0), [])
     })
   })
 
   describe('files the agent hands over', () => {
-    test('are copied into outbox and served from a url', () => {
+    test('are spooled and served from a url', () => {
       const src = join(dir, 'diagram.png')
       writeFileSync(src, 'png-bytes')
       const published = state.publishFile(src)
       assert.equal(published.name, 'diagram.png')
       assert.match(published.url, /^\/files\/\d+-diagram\.png$/)
-      assert.ok(existsSync(join(dir, 'out', published.url.replace('/files/', ''))))
+      assert.ok(existsSync(join(dir, 'files', published.url.replace('/files/', ''))))
     })
 
     test('a type the iPad cannot show is refused', () => {
@@ -172,11 +158,9 @@ describe('state', () => {
   })
 
   describe('the open page', () => {
-    test('follows the iPad, and a title reaches it', () => {
-      state.pushTurn(page('o', { boardId: 'B9', boardTitle: 'Untitled' }))
-      state.setTitle('Login flow')
-      assert.equal(state.currentBoard.title, 'Login flow')
-      assert.deepEqual(sent.at(-1), { type: 'title', boardId: 'B9', title: 'Login flow' })
+    test('follows whichever page the iPad last sent from', () => {
+      state.pushTurn(page('o', { boardId: 'B9', boardTitle: 'Login flow' }))
+      assert.deepEqual(state.currentBoard, { id: 'B9', title: 'Login flow' })
     })
   })
 })

@@ -5,7 +5,6 @@
 // HTTP transport is stateless and creates one per request.
 
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { pngSize } from './state.mjs'
@@ -55,7 +54,7 @@ export const TOOLS = [
   },
   {
     name: 'sketchpad_list_turns',
-    description: 'List pages sent (newest first): turn_id, time, page, note, new_strokes, and what you replied. Defaults to the page the iPad currently has open.',
+    description: 'List pages sent (newest first): turn_id, time, page, note, new_strokes, and what you replied. Defaults to the page the iPad currently has open. The history lives on the iPad, so this needs it connected.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -66,7 +65,7 @@ export const TOOLS = [
   },
   {
     name: 'sketchpad_get_turn',
-    description: 'Fetch one earlier page: its note and the PNG as it was at that moment. Use it to compare versions or answer "what did I change".',
+    description: 'Fetch one earlier page: its note and the PNG as it was at that moment. Use it to compare versions or answer "what did I change". The history lives on the iPad, so this needs it connected.',
     inputSchema: {
       type: 'object',
       properties: { turn_id: { type: 'string' }, include_image: { type: 'boolean', description: 'Default true.' } },
@@ -93,6 +92,9 @@ const text = s => ({ content: [{ type: 'text', text: s }] })
 const fail = s => ({ content: [{ type: 'text', text: s }], isError: true })
 const image = data => ({ type: 'image', data, mimeType: 'image/png' })
 
+/// The iPad keeps the pages; without it there is no history to read and no page to title.
+const OFFLINE = 'no iPad connected — it holds the pages, so this needs it awake and on the same network'
+
 /// What the agent reads when a page arrives: enough to answer, and how to answer in kind.
 function describeTurn(turn, pending) {
   return [
@@ -107,8 +109,8 @@ function describeTurn(turn, pending) {
 
 const summariseTurn = t =>
   `${t.turnId}  ${new Date(t.ts).toISOString().slice(11, 19)}  page="${t.boardTitle ?? ''}"  strokes=${t.strokes ?? '?'}  ` +
-  `note=${JSON.stringify(t.text || '')}  replies=${t.replies.length}` +
-  (t.replies.length ? ' (' + t.replies.map(r => r.files.map(f => f.kind).join('+') || 'text').join(', ') + ')' : '')
+  `note=${JSON.stringify(t.text || '')}  replies=${t.replies?.length ?? 0}` +
+  (t.replies?.length ? ' (' + t.replies.map(r => r.kind || 'text').join(', ') + ')' : '')
 
 export function buildMcpServer({ state, broadcast, clientCount, log = () => {} }) {
   const server = new Server({ name: 'sketchpad', version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
@@ -127,9 +129,10 @@ export function buildMcpServer({ state, broadcast, clientCount, log = () => {} }
     },
 
     async sketchpad_get_canvas() {
-      const png = await state.requestSnapshot()
-      if (!png) return fail(clientCount() ? 'canvas snapshot timed out' : 'no iPad connected')
-      return { content: [{ type: 'text', text: 'current canvas' }, image(png)] }
+      const answer = await state.requestSnapshot()
+      if (!answer) return fail(clientCount() ? 'canvas snapshot timed out' : OFFLINE)
+      if (!answer.png) return text('the canvas is empty — nothing drawn on the page yet')
+      return { content: [{ type: 'text', text: 'current canvas' }, image(answer.png)] }
     },
 
     async sketchpad_show(a) {
@@ -145,31 +148,31 @@ export function buildMcpServer({ state, broadcast, clientCount, log = () => {} }
         turnId: a.turn_id ?? state.lastTurn?.turnId, ts: Date.now()
       }
       broadcast(reply)
-      state.recordReply(reply.turnId, { id: reply.id, turnId: reply.turnId, text: reply.text, files, ts: reply.ts })
+      state.recordReply({ id: reply.id, turnId: reply.turnId, text: reply.text, files, ts: reply.ts })
       return text(clientCount() ? 'shown' : 'shown (no iPad connected right now)')
     },
 
     async sketchpad_list_turns(a) {
-      const rows = state.listTurns({ boardId: a.board_id, limit: Number(a.limit) || 20 })
+      const rows = await state.listTurns({ boardId: a.board_id, limit: Number(a.limit) || 20 })
+      if (!rows) return fail(OFFLINE)
       return text(rows.length ? rows.map(summariseTurn).join('\n') : 'no turns yet')
     },
 
     async sketchpad_get_turn(a) {
-      const turn = state.getTurn(a.turn_id)
-      if (!turn) return fail(`unknown turn_id ${a.turn_id}`)
+      const turn = await state.getTurn(a.turn_id, a.include_image !== false)
+      if (!turn) return fail(clientCount() ? `unknown turn_id ${a.turn_id}` : OFFLINE)
       const content = [{
         type: 'text',
         text: `turn_id=${turn.turnId} page="${turn.boardTitle ?? ''}" time=${new Date(turn.ts).toISOString()}\n` +
-              `note: ${turn.text || '(none)'}\nreplies: ${JSON.stringify(turn.replies)}`
+              `note: ${turn.text || '(none)'}\nreplies: ${JSON.stringify(turn.replies ?? [])}`
       }]
-      if (a.include_image !== false && turn.pngPath) {
-        try { content.push(image(readFileSync(turn.pngPath).toString('base64'))) } catch { /* the PNG was cleaned up */ }
-      }
+      if (turn.png) content.push(image(turn.png))
       return { content }
     },
 
     async sketchpad_set_title(a) {
-      state.setTitle(String(a.title), a.board_id)
+      if (!clientCount()) return fail(OFFLINE)
+      broadcast({ type: 'title', title: String(a.title), boardId: a.board_id ?? state.currentBoard?.id })
       return text(`titled "${a.title}"`)
     },
 
@@ -180,8 +183,7 @@ export function buildMcpServer({ state, broadcast, clientCount, log = () => {} }
         pending_turns: state.pending(),
         agent_listening: state.isListening(),
         current_page: state.currentBoard,
-        last_turn_id: state.lastTurn?.turnId ?? null,
-        turns_recorded: state.turnsRecorded
+        last_turn_id: state.lastTurn?.turnId ?? null
       }))
     }
   }

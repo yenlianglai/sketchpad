@@ -14,14 +14,18 @@ import { buildMcpServer, TOOLS } from '../server/tools.mjs'
 const RED_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=='
 
 describe('tools', () => {
-  let dir, sent, clients, state, client, server
+  let dir, sent, clients, state, client, server, ipad
+
+  /// Everything the server broadcasts, plus a stand-in iPad that answers what it is asked — the
+  /// history lives on the device, so a test that looks back has to have one.
+  const broadcast = m => {
+    sent.push(m)
+    if (m.type === 'ask') queueMicrotask(() => state.answer(m.id, ipad?.(m) ?? null))
+  }
 
   async function connect() {
-    state = createState({
-      broadcast: m => sent.push(m), clientCount: () => clients,
-      inboxDir: dir, outboxDir: join(dir, 'out')
-    })
-    server = buildMcpServer({ state, broadcast: m => sent.push(m), clientCount: () => clients })
+    state = createState({ broadcast, clientCount: () => clients, spoolDir: dir })
+    server = buildMcpServer({ state, broadcast, clientCount: () => clients })
     const [a, b] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test', version: '0' })
     await Promise.all([server.connect(b), client.connect(a)])
@@ -35,6 +39,7 @@ describe('tools', () => {
     dir = mkdtempSync(join(tmpdir(), 'sketchpad-tools-'))
     sent = []
     clients = 1
+    ipad = null
     await connect()
   })
   afterEach(async () => {
@@ -111,11 +116,12 @@ describe('tools', () => {
       assert.match(textOf(result), /sketchpad_show failed/)
     })
 
-    test('the reply is remembered against its page for replay', async () => {
+    test('the reply is held for an iPad that is not there to receive it', async () => {
       state.pushTurn({ turnId: 'p1', ts: Date.now() })
       await call('sketchpad_show', { text: 'remembered', turn_id: 'p1' })
-      assert.deepEqual(state.getTurn('p1').replies.map(r => r.text), ['remembered'])
-      assert.deepEqual(state.recentReplies(0).map(r => r.text), ['remembered'])
+      const [held] = state.repliesSince(0)
+      assert.equal(held.text, 'remembered')
+      assert.equal(held.turnId, 'p1')
     })
 
     test('it still goes through with no iPad connected, and says so', async () => {
@@ -125,41 +131,46 @@ describe('tools', () => {
   })
 
   describe('looking back', () => {
-    test('list_turns summarises pages and their replies, newest first', async () => {
-      state.pushTurn({ turnId: 'x1', text: 'first', strokes: 2, boardId: 'B', ts: 1 })
-      state.pushTurn({ turnId: 'x2', text: 'second', strokes: 5, boardId: 'B', ts: 2 })
-      await call('sketchpad_show', { text: 'noted', turn_id: 'x2' })
+    const history = [
+      { turnId: 'x2', text: 'second', strokes: 5, ts: 2, boardTitle: 'B', replies: [{ kind: 'sketch' }] },
+      { turnId: 'x1', text: 'first', strokes: 2, ts: 1, boardTitle: 'B', replies: [] }
+    ]
+
+    test('list_turns summarises what the iPad sends back, newest first', async () => {
+      ipad = () => ({ turns: history })
       const lines = textOf(await call('sketchpad_list_turns')).split('\n')
       assert.match(lines[0], /^x2/)
       assert.match(lines[0], /strokes=5/)
-      assert.match(lines[0], /replies=1/)
+      assert.match(lines[0], /replies=1 \(sketch\)/)
       assert.match(lines[1], /^x1/)
     })
 
     test('list_turns on an empty page says so', async () => {
+      ipad = () => ({ turns: [] })
       assert.equal(textOf(await call('sketchpad_list_turns')), 'no turns yet')
     })
 
     test('get_turn returns the page and its image', async () => {
-      const png = join(dir, 'x.png')
-      writeFileSync(png, Buffer.from(RED_PNG, 'base64'))
-      state.pushTurn({ turnId: 'y1', text: 'note here', pngPath: png, ts: Date.now() })
+      ipad = m => ({ turn: { ...history[0], turnId: m.turnId, text: 'note here', png: RED_PNG } })
       const result = await call('sketchpad_get_turn', { turn_id: 'y1' })
       assert.match(textOf(result), /note: note here/)
       assert.equal(imageOf(result).data, RED_PNG)
     })
 
-    test('get_turn survives a page whose image has been cleaned up', async () => {
-      state.pushTurn({ turnId: 'y2', pngPath: '/gone/missing.png', ts: Date.now() })
-      const result = await call('sketchpad_get_turn', { turn_id: 'y2' })
-      assert.ok(!result.isError)
-      assert.equal(imageOf(result), undefined)
-    })
-
-    test('an unknown turn is an error the agent can read', async () => {
+    test('a turn id the iPad does not know is an error the agent can read', async () => {
+      ipad = () => ({})
       const result = await call('sketchpad_get_turn', { turn_id: 'nope' })
       assert.equal(result.isError, true)
       assert.match(textOf(result), /unknown turn_id nope/)
+    })
+
+    test('with no iPad there is no history to read, and the agent is told why', async () => {
+      clients = 0
+      for (const [name, args] of [['sketchpad_list_turns', {}], ['sketchpad_get_turn', { turn_id: 'x1' }], ['sketchpad_set_title', { title: 'x' }]]) {
+        const result = await call(name, args)
+        assert.equal(result.isError, true, name)
+        assert.match(textOf(result), /no iPad connected/, name)
+      }
     })
   })
 

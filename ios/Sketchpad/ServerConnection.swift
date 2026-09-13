@@ -11,7 +11,8 @@ struct Reply { var id: String; var ts: Double; var text: String; var turnId: Str
 @MainActor
 final class ServerConnection: NSObject, ObservableObject {
     enum Status: Equatable { case disconnected, connecting, connected }
-    enum Event { case reply(Reply), taken(String), title(boardId: String?, title: String), snapshotRequest(String), system(String) }
+    /// Something the Mac wants to know. The iPad is the only place the pages live, so it answers.
+    enum Event { case reply(Reply), taken(String), title(boardId: String?, title: String), ask(id: String, kind: String, params: [String: Any]), system(String) }
 
     @Published var status: Status = .disconnected
     /// The server is up. Says nothing about whether an agent is in the loop.
@@ -65,14 +66,13 @@ final class ServerConnection: NSObject, ObservableObject {
         return json?["turnId"] as? String ?? UUID().uuidString.prefix(8).lowercased()
     }
 
-    func postSnapshot(id: String, png: Data?) {
+    /// Answer something the Mac asked over the socket.
+    func postAnswer(id: String, _ fields: [String: Any]) {
         guard let base = baseURL else { return }
-        var req = URLRequest(url: withToken(base.appendingPathComponent("snapshot")))
+        var req = URLRequest(url: withToken(base.appendingPathComponent("answer")))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
-        var body: [String: Any] = ["id": id]
-        if let png { body["png"] = "data:image/png;base64," + png.base64EncodedString() }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        req.httpBody = try? JSONSerialization.data(withJSONObject: fields.merging(["id": id]) { a, _ in a })
         session.dataTask(with: req).resume()
     }
 
@@ -160,8 +160,8 @@ final class ServerConnection: NSObject, ObservableObject {
             onEvent?(.title(boardId: m["boardId"] as? String, title: m["title"] as? String ?? ""))
         case "sys":
             onEvent?(.system(m["text"] as? String ?? ""))
-        case "snapshot_request":
-            if let id = m["id"] as? String { onEvent?(.snapshotRequest(id)) }
+        case "ask":
+            if let id = m["id"] as? String, let kind = m["kind"] as? String { onEvent?(.ask(id: id, kind: kind, params: m)) }
         default: break
         }
     }

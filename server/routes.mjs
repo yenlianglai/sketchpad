@@ -1,8 +1,8 @@
 // The HTTP surface. Two audiences on one port: the iPad app, and any agent speaking MCP over
 // Streamable HTTP at /mcp.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { join, basename, extname } from 'node:path'
+import { readFileSync, existsSync } from 'node:fs'
+import { basename, extname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { buildMcpServer } from './tools.mjs'
@@ -27,7 +27,7 @@ const json = (res, value) => send(res, 200, JSON.stringify(value), 'application/
 
 const stripDataURL = s => s.replace(/^data:image\/png;base64,/, '')
 
-export function createRoutes({ state, hub, inboxDir, outboxDir, authorize, pairingURL, log = () => {} }) {
+export function createRoutes({ state, hub, authorize, pairingURL, log = () => {} }) {
   /// Stateless Streamable HTTP: a fresh transport and server per request, all sharing one state.
   async function handleMCP(req, res) {
     let body
@@ -49,8 +49,7 @@ export function createRoutes({ state, hub, inboxDir, outboxDir, authorize, pairi
     let pngBase64 = null
     if (body.png) {
       pngBase64 = stripDataURL(body.png)
-      pngPath = join(inboxDir, `${new Date().toISOString().replace(/[:.]/g, '-')}-${turnId}.png`)
-      writeFileSync(pngPath, Buffer.from(pngBase64, 'base64'))
+      pngPath = state.spoolPage(turnId, pngBase64)   // a working copy for the agent, not a record
     }
     state.pushTurn({
       turnId, text: body.text, pngPath, pngBase64, strokes: body.strokes,
@@ -68,15 +67,18 @@ export function createRoutes({ state, hub, inboxDir, outboxDir, authorize, pairi
       if (url.pathname === '/mcp') return handleMCP(req, res)
       if (req.method === 'POST' && url.pathname === '/turn') return receiveTurn(req, res)
 
-      if (req.method === 'POST' && url.pathname === '/snapshot') {
+      // The iPad answering something we asked it — a canvas snapshot, or a slice of its history.
+      if (req.method === 'POST' && (url.pathname === '/answer' || url.pathname === '/snapshot')) {
         const body = JSON.parse((await readBody(req)).toString('utf8'))
-        state.resolveSnapshot(body.id, body.png ? stripDataURL(body.png) : null)
+        if (body.png) body.png = stripDataURL(body.png)
+        if (body.turn?.png) body.turn.png = stripDataURL(body.turn.png)
+        state.answer(body.id, body)
         return send(res, 200, 'ok')
       }
 
-      // What the iPad missed while it was disconnected.
+      // Replies the iPad missed while it was disconnected.
       if (url.pathname === '/replies') {
-        return json(res, state.recentReplies(Number(url.searchParams.get('since') || 0)))
+        return json(res, state.repliesSince(Number(url.searchParams.get('since') || 0)))
       }
 
       if (url.pathname === '/pair') return json(res, pairingURL())
@@ -91,7 +93,7 @@ export function createRoutes({ state, hub, inboxDir, outboxDir, authorize, pairi
       // Files the agent handed over, fetched by the iPad.
       if (url.pathname.startsWith('/files/')) {
         const name = basename(url.pathname)
-        const path = join(outboxDir, name)
+        const path = state.spooledFile(name)
         if (!existsSync(path)) return send(res, 404, 'not found')
         return send(res, 200, readFileSync(path), MIME[extname(name).toLowerCase()] ?? 'application/octet-stream')
       }

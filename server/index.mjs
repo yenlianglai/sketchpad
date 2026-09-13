@@ -3,21 +3,21 @@
 //   iPad  ──POST /turn (page as PNG)──▶  server  ──MCP /mcp──▶  agent
 //   iPad  ◀───── WebSocket /ws ───────  server  ◀──────────────
 //
-// Wiring only. The parts live in hub (connected iPads), state (turns, replies, files),
+// Wiring only. The parts live in hub (connected iPads), state (what is in flight),
 // tools (the MCP surface), routes (HTTP) and pairing (Bonjour, QR).
 
-import { mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { createServer } from 'node:http'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { createHub } from './hub.mjs'
 import { createState } from './state.mjs'
 import { createRoutes } from './routes.mjs'
 import { advertiseBonjour, lanIP, pairingURL, printPairing } from './pairing.mjs'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const INBOX_DIR = join(ROOT, 'inbox')     // pages the iPad sent, as PNGs, beside turns.json
-const OUTBOX_DIR = join(ROOT, 'outbox')   // files the agent handed over, served at /files/
+// Nothing durable lives here. The iPad keeps the pages; this is only what is in flight — a page an
+// agent is reading, a file it handed over, a reply the iPad has not collected yet. Deleting it
+// loses nothing you drew.
+const SPOOL_DIR = process.env.SKETCHPAD_SPOOL_DIR || join(homedir(), 'Library', 'Caches', 'sketchpad')
 
 const PORT = Number(process.env.SKETCHPAD_PORT ?? 8791)
 const TOKEN = process.env.SKETCHPAD_TOKEN ?? ''
@@ -26,15 +26,13 @@ const QUIET = process.env.SKETCHPAD_QUIET === '1'
 
 const log = (...args) => console.error('[sketchpad]', ...args)
 
-for (const dir of [INBOX_DIR, OUTBOX_DIR]) mkdirSync(dir, { recursive: true })
-
 const hub = createHub({ log: QUIET ? () => {} : log })
 const state = createState({
   broadcast: hub.broadcast,
   clientCount: hub.clientCount,
-  inboxDir: INBOX_DIR,
-  outboxDir: OUTBOX_DIR
+  spoolDir: SPOOL_DIR
 })
+state.prune()
 
 // An iPad that connects mid-session should see the current state, not a blank one.
 hub.onGreeting(() => ({ type: 'hello', listening: state.isListening() }))
@@ -42,7 +40,6 @@ hub.onGreeting(() => ({ type: 'hello', listening: state.isListening() }))
 const authorize = url => !TOKEN || url.searchParams.get('token') === TOKEN
 const server = createServer(createRoutes({
   state, hub,
-  inboxDir: INBOX_DIR, outboxDir: OUTBOX_DIR,
   authorize,
   pairingURL: () => pairingURL({ host: HOST, port: PORT, token: TOKEN }),
   log: QUIET ? () => {} : log

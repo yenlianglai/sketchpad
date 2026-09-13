@@ -14,7 +14,7 @@ extension ContentView {
                 var b = store.current
                 if let bid = boardId, let uuid = UUID(uuidString: bid), uuid != b.id, let other = store.board(uuid) { if !other.titleLocked { store.rename(uuid, to: title) }; return }
                 if !b.titleLocked { b.title = title; store.current = b; showFlash("Page titled “\(title)”") }
-            case .snapshotRequest(let id): conn.postSnapshot(id: id, png: renderCurrent(highlight: false)?.png)
+            case .ask(let id, let kind, let params): answer(id: id, kind: kind, params: params)
             case .system(let s): showFlash(s)
             }
         }

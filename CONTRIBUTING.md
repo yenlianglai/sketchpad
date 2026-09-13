@@ -6,7 +6,7 @@
 server/
   index.mjs         wiring: config, the http server, and starting the rest
   hub.mjs           the iPads currently connected — broadcast, clientCount
-  state.mjs         turns, replies, snapshots, published files, the manifest
+  state.mjs         what is in flight: the queue, questions for the iPad, the spool
   tools.mjs         the seven MCP tools, over state
   routes.mjs        the http surface, including /mcp
   pairing.mjs       Bonjour and the terminal QR
@@ -21,6 +21,12 @@ test/                  server tests
 
 `state.mjs` knows nothing about MCP or HTTP, and `tools.mjs` knows nothing about sockets. That is
 what makes both testable without starting anything.
+
+**The iPad is the only store.** The server keeps nothing you drew: a page waits in memory until an
+agent takes it, a handed-over file and an undelivered reply sit in `~/Library/Caches/sketchpad`
+until collected, and everything there is dropped after a day. When an agent looks back —
+`list_turns`, `get_turn` — the server asks the iPad over the WebSocket and the iPad answers from its
+own `Documents`. So those tools need the iPad awake, and deleting the cache loses nothing.
 
 ## Running it
 
@@ -38,6 +44,7 @@ Useful environment variables while developing:
 | `SKETCHPAD_QUIET=1` | No banner, no request log. Used by the tests. |
 | `SKETCHPAD_NO_BONJOUR=1` | Do not advertise. Used by the tests and by CI. |
 | `SKETCHPAD_TOKEN` | Require a token. The pairing QR carries it. |
+| `SKETCHPAD_SPOOL_DIR` | Move the in-flight cache. Used by the tests. |
 
 ## Tests
 
@@ -48,9 +55,9 @@ npm run test:ios   # the app, in a simulator
 
 Four suites, and they are deliberately different shapes:
 
-- `test/state.test.mjs` — the queue, the manifest, replay, the listening light. Pure, fast, no ports.
+- `test/state.test.mjs` — the queue, asking the iPad, the spool, the listening light. Pure, no ports.
 - `test/tools.test.mjs` — the MCP tools through a real client over an in-memory transport.
-- `test/http.test.mjs` — a real server process, a real MCP client, a fake iPad on the WebSocket.
+- `test/http.test.mjs` — a real server process, a real MCP client, a stand-in iPad on the WebSocket.
 - `test/stdio.test.mjs` — the wrapper, spawned the way a desktop client spawns it.
 - `ios/SketchpadTests` — the two pure functions that fail silently when they are wrong: the
   SVG-to-strokes parser and the pairing-QR parser.

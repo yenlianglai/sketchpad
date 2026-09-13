@@ -45,7 +45,11 @@ describe('over http', () => {
 
   const call = (name, args = {}) => client.callTool({ name, arguments: args })
   const textOf = r => r.content.find(c => c.type === 'text').text
-  const seen = type => fromIPad.find(m => m.type === type)
+  const seen = (type, where = () => true) => fromIPad.find(m => m.type === type && where(m))
+  /// The iPad answering something the server asked it over the socket.
+  const answer = body => fetch(`${BASE}/answer`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+  })
 
   test('the iPad is greeted with the current state', () => {
     assert.equal(seen('hello')?.listening, false)
@@ -87,24 +91,23 @@ describe('over http', () => {
 
   test('the canvas can be snapshotted on demand', async () => {
     const asked = call('sketchpad_get_canvas')
-    await waitFor(() => !!seen('snapshot_request'))
-    await fetch(`${BASE}/snapshot`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: seen('snapshot_request').id, png: `data:image/png;base64,${SKETCH}` })
-    })
+    await waitFor(() => !!seen('ask'))
+    await answer({ id: seen('ask').id, png: `data:image/png;base64,${SKETCH}` })
     assert.equal((await asked).content.find(c => c.type === 'image').data, SKETCH)
+  })
+
+  test('the history comes from the iPad, not from here', async () => {
+    const asked = call('sketchpad_list_turns', { board_id: 'all' })
+    await waitFor(() => !!seen('ask', m => m.kind === 'list_turns'))
+    const question = seen('ask', m => m.kind === 'list_turns')
+    await answer({ id: question.id, turns: [{ turnId: 'kept-on-device', ts: 1, strokes: 4, text: 'from the iPad' }] })
+    assert.match((await asked).content[0].text, /kept-on-device/)
   })
 
   test('naming the page reaches the iPad', async () => {
     await call('sketchpad_set_title', { title: 'Login flow' })
     await waitFor(() => !!seen('title'))
     assert.equal(seen('title').title, 'Login flow')
-  })
-
-  test('the page is on disk, readable without this process', async () => {
-    const rows = textOf(await call('sketchpad_list_turns', { board_id: 'all' }))
-    assert.match(rows, /make this a login form/)
   })
 
   test('an unknown path still answers rather than hanging', async () => {

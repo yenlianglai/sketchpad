@@ -1,39 +1,53 @@
-// Everything Sketchpad remembers: the queue of pages waiting for an agent, the reply history, and
-// which page the iPad has open. No MCP, no HTTP — so it can be tested on its own.
+// What the server holds while things are in flight. Nothing here is a record.
+//
+// The iPad owns the pages, the strokes and the history; it is the only durable store. This process
+// is a relay: it holds a page until an agent takes it, holds a file until the iPad fetches it, and
+// holds a reply until the iPad is back to receive it. Anything the agent wants to look back at is
+// asked of the iPad over the same round-trip the canvas snapshot uses.
 
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, existsSync, statSync, copyFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, statSync, copyFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs'
 import { join, basename, extname } from 'node:path'
 
 /// An agent counts as listening while one is blocked in wait_for_turn, and for a while after, so
 /// the gap between two polls does not flicker the iPad's status light.
 export const LISTEN_GRACE_MS = 90_000
+/// How long a spooled file or reply is kept for an iPad that has not come back.
+export const SPOOL_TTL_MS = 24 * 60 * 60 * 1000
 export const PUBLISHABLE = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.pdf']
 const MAX_FILE_BYTES = 50 * 1024 * 1024
+const MAX_PENDING_REPLIES = 50
 
-export function createState({ broadcast, clientCount, inboxDir, outboxDir, now = () => Date.now() }) {
+export function createState({ broadcast, clientCount, spoolDir, now = () => Date.now() }) {
   const queue = []             // pages sent but not yet taken by an agent
   const waiters = []           // resolvers of pending wait_for_turn calls
-  const snapshots = new Map()  // request id → resolve(pngBase64 | null)
+  const asked = new Map()      // request id → resolve(answer | null), for anything we ask the iPad
   let lastTurn = null
   let currentBoard = null      // { id, title } of the page the iPad has open
 
-  // The manifest is a plain file beside the PNGs, so the history is readable without this process.
-  const manifestPath = join(inboxDir, 'turns.json')
-  const manifest = readManifest(manifestPath)
-  const save = () => writeFileSync(manifestPath, JSON.stringify(manifest, null, 1))
+  const filesDir = join(spoolDir, 'files')
+  const pagesDir = join(spoolDir, 'pages')
+  const repliesPath = join(spoolDir, 'undelivered.json')
+  for (const dir of [filesDir, pagesDir]) mkdirSync(dir, { recursive: true })
 
-  // MARK: turns
+  // Replies the iPad has not had a chance to receive. Kept across a restart so a reply sent while
+  // the iPad was asleep is not simply lost.
+  let undelivered = readJSON(repliesPath, [])
+  const saveUndelivered = () => writeFileSync(repliesPath, JSON.stringify(undelivered))
+
+  // MARK: pages in flight
+
+  /// A working copy of the page an agent is about to look at, so a tool that only takes a path can
+  /// open it. It is not the record — the iPad keeps that — and prune() clears it out within a day.
+  function spoolPage(turnId, base64) {
+    const path = join(pagesDir, `${turnId}.png`)
+    writeFileSync(path, Buffer.from(base64, 'base64'))
+    return path
+  }
 
   function pushTurn(turn) {
     lastTurn = turn
     if (turn.boardId) currentBoard = { id: turn.boardId, title: turn.boardTitle || currentBoard?.title || '' }
-    manifest.push({
-      turnId: turn.turnId, boardId: turn.boardId ?? null, boardTitle: turn.boardTitle ?? null,
-      ts: turn.ts ?? now(), text: turn.text ?? '', strokes: turn.strokes ?? null,
-      pngPath: turn.pngPath ?? null, replies: []
-    })
-    save()
     queue.push(turn)
     waiters.shift()?.()
   }
@@ -56,68 +70,67 @@ export function createState({ broadcast, clientCount, inboxDir, outboxDir, now =
     })
   }
 
-  function listTurns({ boardId, limit = 20 } = {}) {
-    const board = boardId ?? currentBoard?.id
-    return manifest
-      .filter(t => boardId === 'all' || !board || t.boardId === board)
-      .slice(-limit)
-      .reverse()
-  }
-  const getTurn = turnId => manifest.find(t => t.turnId === turnId) ?? null
+  // MARK: asking the iPad
 
-  // MARK: replies
-
-  function recordReply(turnId, reply) {
-    const record = manifest.find(t => t.turnId === turnId) ?? manifest.at(-1)
-    if (!record) return
-    record.replies.push(reply)
-    save()
-  }
-
-  /// Replies newer than `sinceMs`, oldest first, so an iPad that was asleep or offline picks up what
-  /// it missed instead of losing it.
-  function recentReplies(sinceMs = 0, limit = 30) {
-    const out = []
-    for (const turn of manifest)
-      for (const reply of turn.replies)
-        if ((reply.ts ?? 0) > sinceMs) out.push({ ...reply, turnId: reply.turnId ?? turn.turnId })
-    out.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
-    return out.slice(-limit)
-  }
-
-  // MARK: the page the iPad has open
-
-  function setTitle(title, boardId) {
-    const id = boardId ?? currentBoard?.id
-    if (currentBoard && (!boardId || boardId === currentBoard.id)) currentBoard.title = title
-    broadcast({ type: 'title', boardId: id, title })
-  }
-
-  // MARK: snapshots
-
-  /// Ask the iPad for a picture of the canvas as it is right now.
-  function requestSnapshot(timeoutMs = 4000) {
+  /// Ask the connected iPad something and wait for its answer. The iPad is the only place the
+  /// history lives, so every look-back goes through here.
+  function ask(kind, params = {}, timeoutMs = 6000) {
     if (clientCount() === 0) return Promise.resolve(null)
     const id = randomUUID().slice(0, 8)
     return new Promise(resolve => {
-      const timer = setTimeout(() => { snapshots.delete(id); resolve(null) }, timeoutMs)
-      snapshots.set(id, png => { clearTimeout(timer); snapshots.delete(id); resolve(png) })
-      broadcast({ type: 'snapshot_request', id })
+      const timer = setTimeout(() => { asked.delete(id); resolve(null) }, timeoutMs)
+      asked.set(id, answer => { clearTimeout(timer); asked.delete(id); resolve(answer) })
+      broadcast({ type: 'ask', id, kind, ...params })
     })
   }
-  const resolveSnapshot = (id, pngBase64) => snapshots.get(id)?.(pngBase64 || null)
+  const answer = (id, value) => asked.get(id)?.(value ?? null)
 
-  // MARK: files the agent hands over
+  /// null when nobody answered; { png } — possibly without one, for a blank canvas — when they did.
+  const requestSnapshot = (timeoutMs = 4000) => ask('canvas', {}, timeoutMs)
+  const listTurns = ({ boardId, limit = 20 } = {}) => ask('list_turns', { boardId, limit }).then(r => r?.turns ?? null)
+  const getTurn = (turnId, includeImage = true) => ask('get_turn', { turnId, includeImage }).then(r => r?.turn ?? null)
 
-  /// Copy it into outbox so the iPad can fetch it over /files/.
+  // MARK: replies waiting for the iPad
+
+  function recordReply(reply) {
+    undelivered.push(reply)
+    if (undelivered.length > MAX_PENDING_REPLIES) undelivered = undelivered.slice(-MAX_PENDING_REPLIES)
+    saveUndelivered()
+  }
+
+  /// What the iPad missed. It dedupes by reply id, so overlap is harmless.
+  function repliesSince(sinceMs = 0) {
+    prune()
+    return undelivered.filter(r => (r.ts ?? 0) > sinceMs).sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
+  }
+
+  // MARK: files in flight
+
+  /// Copy a file the agent produced into the spool so the iPad can fetch it over /files/.
   function publishFile(path) {
     const ext = extname(path).toLowerCase()
     if (!PUBLISHABLE.includes(ext)) throw new Error(`unsupported file type ${ext || '(none)'}; use ${PUBLISHABLE.join(' ')}`)
     if (statSync(path).size > MAX_FILE_BYTES) throw new Error(`file too large: ${path}`)
-    mkdirSync(outboxDir, { recursive: true })
     const name = `${now()}-${basename(path)}`
-    copyFileSync(path, join(outboxDir, name))
+    copyFileSync(path, join(filesDir, name))
     return { url: `/files/${name}`, name: basename(path) }
+  }
+  const spooledFile = name => join(filesDir, basename(name))
+
+  /// Drop anything the iPad has had a day to collect.
+  function prune() {
+    const cutoff = now() - SPOOL_TTL_MS
+    const before = undelivered.length
+    undelivered = undelivered.filter(r => (r.ts ?? 0) > cutoff)
+    if (undelivered.length !== before) saveUndelivered()
+    for (const dir of [filesDir, pagesDir]) {
+      try {
+        for (const name of readdirSync(dir)) {
+          const p = join(dir, name)
+          if (statSync(p).mtimeMs < cutoff) unlinkSync(p)
+        }
+      } catch { /* the spool is disposable; failing to tidy it is not worth an error */ }
+    }
   }
 
   // MARK: is an agent in the loop?
@@ -145,24 +158,24 @@ export function createState({ broadcast, clientCount, inboxDir, outboxDir, now =
   }
 
   return {
-    pushTurn, takeTurn, listTurns, getTurn,
-    recordReply, recentReplies,
-    setTitle, requestSnapshot, resolveSnapshot, publishFile,
+    pushTurn, takeTurn, spoolPage,
+    ask, answer, requestSnapshot, listTurns, getTurn,
+    recordReply, repliesSince,
+    publishFile, spooledFile, prune,
     pending: () => queue.length,
     isListening: () => listening,
     get lastTurn() { return lastTurn },
-    get currentBoard() { return currentBoard },
-    get turnsRecorded() { return manifest.length }
+    get currentBoard() { return currentBoard }
   }
 }
 
-function readManifest(path) {
-  if (!existsSync(path)) return []
+function readJSON(path, fallback) {
+  if (!existsSync(path)) return fallback
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8'))
-    return Array.isArray(parsed) ? parsed : []
+    return Array.isArray(parsed) === Array.isArray(fallback) ? parsed : fallback
   } catch {
-    return []   // a corrupt manifest should cost you history, not the ability to draw
+    return fallback
   }
 }
 
