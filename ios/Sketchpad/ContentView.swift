@@ -111,7 +111,9 @@ struct ContentView: View {
                    layers: store.current.layers, layerImage: { store.image(named: $0.file, in: store.layersDir) },
                    onStrokesChanged: strokesChanged,
                    onLayerLongPress: grabLayer,
-                   onTapEmpty: { if !layerMode { toggleDrawer(tab) } },
+                   // Tapping bare canvas only gets the panel out of the way. Opening it is a
+                   // deliberate act: tap the rail. Otherwise every stray tap pops it open.
+                   onTapEmpty: { if showDrawer && !layerMode { showDrawer = false } },
                    onDropImage: dropImage)
             .ignoresSafeArea()
             .overlay { if drawing.strokes.isEmpty && store.current.layers.isEmpty { emptyHint } }

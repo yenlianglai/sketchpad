@@ -92,7 +92,7 @@ where you want, or dismiss them.
 | --- | --- |
 | Two fingers · three fingers | Undo · redo |
 | Two-finger double tap | Fit the page |
-| Tap bare canvas | Show or hide the panel |
+| Tap bare canvas | Dismiss the panel |
 | Long-press a layer | Grab it, then drag or pinch |
 | Drop an image | Becomes a layer — drop a screenshot in and annotate it |
 

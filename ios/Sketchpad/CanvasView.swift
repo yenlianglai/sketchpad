@@ -96,7 +96,7 @@ struct CanvasView: UIViewRepresentable {
     var onStrokesChanged: () -> Void
     /// Long-pressing a layer (finger or Pencil) while drawing: hand the layer id back so the app can enter layer mode.
     var onLayerLongPress: ((UUID) -> Void)?
-    /// A finger tap on bare canvas. Only fires when fingers cannot draw, so it is unambiguous.
+    /// A finger tap on bare canvas, used to dismiss the panel. Only fires when fingers cannot draw.
     var onTapEmpty: (() -> Void)?
     /// An image dropped onto the canvas, at that canvas point.
     var onDropImage: ((UIImage, CGPoint) -> Void)?
@@ -163,7 +163,7 @@ struct CanvasView: UIViewRepresentable {
         canvas.addGestureRecognizer(fit)
         undo.require(toFail: fit)
 
-        // A single finger tap on bare canvas gets the chrome out of the way, or brings it back.
+        // A single finger tap on bare canvas dismisses the panel.
         let bare = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.singleTap))
         bare.delegate = context.coordinator
         canvas.addGestureRecognizer(bare)

@@ -170,23 +170,41 @@ struct MediaTab: View {
                         if let u = it.fileURL { ShareLink(item: u) { Label("Share", systemImage: "square.and.arrow.up") } }
                         Button { actions.preview(it.turn) } label: { Label("Show turn", systemImage: "eye") }
                     } label: {
-                        ZStack(alignment: .topLeading) {
-                            Group {
-                                if let img = it.image { Image(uiImage: img).resizable().scaledToFill() } else { ProgressView() }
-                            }
-                            .frame(height: 118).frame(maxWidth: .infinity).background(.white).clipped()
-                            Text(it.label).font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 7).padding(.vertical, 3)
-                                .background(it.isAgent ? Color(red: 0.98, green: 0.91, blue: 0.88) : Color(white: 0.92), in: Capsule())
-                                .foregroundStyle(it.isAgent ? Color(uiColor: Settings.agentColor) : .primary)
-                                .padding(8)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(.black.opacity(0.06)))
+                        MediaTile(item: it)
                     }
                 }
             }
             .padding(.horizontal, 16).padding(.bottom, 16)
         }
+    }
+}
+
+/// One image in the Media grid. Pages are cropped to their content, so they come in at every
+/// aspect ratio going: fit the whole thing rather than filling and cropping the middle out of it.
+struct MediaTile: View {
+    let item: MediaTab.Item
+    /// An agent image has no local file until the download finishes.
+    private var isLoading: Bool { item.agentItem != nil && item.fileURL == nil }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.white
+            if let img = item.image {
+                Image(uiImage: img).resizable().scaledToFit().padding(6)
+            } else if isLoading {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "photo").font(.title3).foregroundStyle(.tertiary)
+            }
+            Text(item.label).font(.caption2.weight(.semibold))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(item.isAgent ? Color(red: 0.98, green: 0.91, blue: 0.88) : Color(white: 0.92), in: Capsule())
+                .foregroundStyle(item.isAgent ? Color(uiColor: Settings.agentColor) : .primary)
+                .padding(8)
+        }
+        .frame(height: 118).frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.black.opacity(0.06)))
     }
 }
 
