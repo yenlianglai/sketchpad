@@ -17,7 +17,14 @@ import { advertiseBonjour, lanIP, pairingURL, printPairing } from './pairing.mjs
 // Nothing durable lives here. The iPad keeps the pages; this is only what is in flight — a page an
 // agent is reading, a file it handed over, a reply the iPad has not collected yet. Deleting it
 // loses nothing you drew.
-const SPOOL_DIR = process.env.SKETCHPAD_SPOOL_DIR || join(homedir(), 'Library', 'Caches', 'sketchpad')
+const SPOOL_DIR = process.env.SKETCHPAD_SPOOL_DIR || join(cacheHome(), 'sketchpad')
+
+/// Where this machine puts throwaway caches.
+function cacheHome() {
+  if (process.platform === 'darwin') return join(homedir(), 'Library', 'Caches')
+  if (process.platform === 'win32') return process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local')
+  return process.env.XDG_CACHE_HOME || join(homedir(), '.cache')
+}
 
 const PORT = Number(process.env.SKETCHPAD_PORT ?? 8791)
 const TOKEN = process.env.SKETCHPAD_TOKEN ?? ''
