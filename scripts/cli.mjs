@@ -18,6 +18,7 @@ import { autostartPlan } from './autostart.mjs'
 import { configHome } from '../server/paths.mjs'
 import { loadOrCreateToken } from '../server/auth.mjs'
 import { localFetch, localURL } from '../server/local-fetch.mjs'
+import { pairingBanner } from '../server/pairing.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const ENTRY = join(ROOT, 'server', 'index.mjs')
@@ -108,12 +109,12 @@ async function pair() {
     process.exitCode = 1
     return
   }
-  say('')
-  say(`  Type this into Sketchpad on your iPad:\n`)
-  say(`      ${info.code}\n`)
-  say('      good for ten minutes, and for one iPad')
-  say(`\n  This Mac is ${info.host}${info.alt.length ? ` (also ${info.alt.join(', ')})` : ''} —`)
-  say('  the app usually finds that on its own.\n')
+  // Same wording the server prints on startup — one place, so it cannot drift.
+  const [host, port] = info.host.split(':')
+  say(pairingBanner({
+    host, port: Number(port), code: info.code,
+    alt: info.alt.map(a => a.split(':')[0])
+  }).join('\n'))
 }
 
 async function devices() {

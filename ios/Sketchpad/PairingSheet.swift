@@ -1,6 +1,4 @@
 import SwiftUI
-import CryptoKit
-import CommonCrypto
 import UIKit
 
 /// Connecting this iPad to a Mac: eight characters read off its screen.
@@ -99,52 +97,5 @@ struct PairingSheet: View {
                 busy = false
             }
         }
-    }
-}
-
-/// Turning what someone typed into what the Mac can check.
-enum PairingProof {
-    /// 200,000 rounds, matching the server. Slow on purpose: without it, a proof captured in the
-    /// middle would give up an eight-character code to an offline search in seconds.
-    static let iterations = 200_000
-
-    static func normalize(_ code: String) -> String {
-        code.uppercased().filter { $0.isNumber || ($0.isLetter && $0.isASCII) }
-    }
-
-    /// Re-inserts the grouping dash as they type, without fighting the cursor.
-    static func grouped(_ raw: String) -> String {
-        let clean = String(normalize(raw).prefix(8))
-        guard clean.count > 4 else { return clean }
-        return clean.prefix(4) + "-" + clean.dropFirst(4)
-    }
-
-    /// PBKDF2-SHA256 over the code, salted with the certificate this iPad was shown. Same inputs as
-    /// the server's, or nothing matches.
-    static func proof(code: String, fingerprint: String) -> String? {
-        let password = Array(normalize(code).utf8)
-        let salt = Array("sketchpad-pairing-v1:\(fingerprint)".utf8)
-        var derived = [UInt8](repeating: 0, count: 32)
-
-        let status = CCKeyDerivationPBKDF(
-            CCPBKDFAlgorithm(kCCPBKDF2),
-            password.map { Int8(bitPattern: $0) }, password.count,
-            salt, salt.count,
-            CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
-            UInt32(iterations),
-            &derived, derived.count
-        )
-        guard status == kCCSuccess else { return nil }
-        return Data(derived).base64URLEncoded
-    }
-}
-
-extension Data {
-    /// base64url, which is what Node's `.toString('base64url')` produces.
-    var base64URLEncoded: String {
-        base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
     }
 }

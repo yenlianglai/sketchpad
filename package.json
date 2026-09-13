@@ -12,7 +12,9 @@
     "test:ios": "cd ios && xcodegen generate && DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer} xcodebuild test -project Sketchpad.xcodeproj -scheme Sketchpad -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet",
     "app": "cd ios && xcodegen generate && open Sketchpad.xcodeproj",
     "setup": "node scripts/cli.mjs install",
-    "status": "node scripts/cli.mjs status"
+    "status": "node scripts/cli.mjs status",
+    "pair": "node scripts/cli.mjs pair",
+    "sketchpad": "node scripts/cli.mjs"
   },
   "engines": {
     "node": ">=22.12"

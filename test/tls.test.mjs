@@ -93,7 +93,7 @@ describe('what the iPad is told', () => {
 
 describe('spotting a tailnet address', () => {
   test('the carrier-grade NAT range is Tailscale; ordinary private ranges are not', async () => {
-    const { addresses } = await import('../server/pairing.mjs')
+    const { addresses } = await import('../server/addresses.mjs')
     const found = addresses()
     // Whatever this machine has, the split must be consistent: nothing can be in both lists.
     assert.equal(found.all.includes(found.lan) || found.lan === 'localhost', true)
@@ -101,5 +101,31 @@ describe('spotting a tailnet address', () => {
       assert.match(found.tailnet, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./)
       assert.notEqual(found.lan, found.tailnet)
     }
+  })
+})
+
+describe('what a person is told', () => {
+  test('a checkout is told to use its npm script, an install its own command', async () => {
+    const { setupCommand, pairingBanner } = await import('../server/pairing.mjs')
+    assert.equal(setupCommand({ linked: false }), 'npm run setup')
+    assert.equal(setupCommand({ linked: true }), 'sketchpad install')
+    // Telling someone to run `sketchpad` when they cloned the repo is telling them to run
+    // something they do not have on their PATH.
+    const cloned = pairingBanner({ host: 'x', port: 1, code: 'AAAA-BBBB', linked: false }).join('\n')
+    assert.ok(cloned.includes('npm run setup'))
+    assert.ok(!cloned.includes('sketchpad install'))
+  })
+
+  test('the same wording serves the terminal and the agent', async () => {
+    const { pairingBanner } = await import('../server/pairing.mjs')
+    const lines = pairingBanner({ host: '192.168.1.5', port: 8791, code: 'AAAA-BBBB' })
+    assert.ok(lines.some(l => l.includes('AAAA-BBBB')))
+    assert.ok(lines.some(l => l.includes('192.168.1.5:8791')))
+    assert.ok(lines.some(l => l.includes('ten minutes')))
+  })
+
+  test('with nothing to show, it says the server is open rather than staying quiet', async () => {
+    const { pairingBanner } = await import('../server/pairing.mjs')
+    assert.ok(pairingBanner({ host: 'x', port: 1 }).join('\n').includes('OPEN'))
   })
 })

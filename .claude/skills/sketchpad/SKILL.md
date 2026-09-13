@@ -19,3 +19,8 @@ Loop until they tell you to stop (a note saying 結束 / stop, or a request that
 7. Go back to step 1.
 
 If you need to see the canvas without waiting, call `sketchpad_get_canvas`.
+
+`image_path` must be absolute — the server has its own working directory, not yours.
+
+If nothing is connected, `sketchpad_status` says so and `sketchpad_pairing_code` gives you a code to
+read out: eight characters they type into Settings → Pair on the iPad, good for ten minutes.

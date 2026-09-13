@@ -61,13 +61,13 @@ describe('looking a command up on the PATH', () => {
 describe('discovery', () => {
   test('does not shell out, so it is not tied to a macOS-only binary', async () => {
     const source = await import('node:fs').then(fs =>
-      fs.readFileSync(new URL('../server/pairing.mjs', import.meta.url), 'utf8'))
+      fs.readFileSync(new URL('../server/addresses.mjs', import.meta.url), 'utf8'))
     assert.ok(!/from 'node:child_process'/.test(source), 'spawning means depending on what is installed')
     assert.ok(!/platform !== 'darwin'/.test(source), 'advertising should not be skipped off macOS')
   })
 
   test('advertises and stops cleanly', async () => {
-    const { advertiseBonjour } = await import('../server/pairing.mjs')
+    const { advertiseBonjour } = await import('../server/addresses.mjs')
     const stop = advertiseBonjour({ port: 8893 })
     assert.equal(typeof stop, 'function')
     stop()
@@ -75,7 +75,7 @@ describe('discovery', () => {
   })
 
   test('can be switched off, which is how the tests and CI run', async () => {
-    const { advertiseBonjour } = await import('../server/pairing.mjs')
+    const { advertiseBonjour } = await import('../server/addresses.mjs')
     process.env.SKETCHPAD_NO_BONJOUR = '1'
     try {
       assert.equal(advertiseBonjour({ port: 8893 })(), undefined)

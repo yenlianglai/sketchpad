@@ -12,7 +12,7 @@ export function configHome() {
 }
 
 /// Throwaway: deleting any of it loses nothing, because the iPad holds what you drew.
-export function cacheHome() {
+function cacheHome() {
   if (process.platform === 'darwin') return join(homedir(), 'Library', 'Caches')
   if (process.platform === 'win32') return process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local')
   return process.env.XDG_CACHE_HOME || join(homedir(), '.cache')

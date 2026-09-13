@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import CryptoKit
 import UIKit
 
 /// A file the agent handed back with a reply.
@@ -304,52 +303,6 @@ extension ServerConnection: NetServiceBrowserDelegate, NetServiceDelegate {
             let entry = "\(host.trimmingCharacters(in: CharacterSet(charactersIn: "."))):\(sender.port)"
             if !discovered.contains(entry) { discovered.append(entry) }
             if let s = settings, s.host.isEmpty { s.host = entry }
-        }
-    }
-}
-
-
-/// Trust on first use, the way a machine on your own desk actually works.
-///
-/// There is no certificate authority that can vouch for a laptop on a home network, so the Mac signs
-/// its own certificate and the pairing QR carries its fingerprint. Scanning that code off your own
-/// screen is the trusted channel; from then on this refuses any certificate that does not match,
-/// which is what stops someone on the same wifi from sitting in the middle.
-final class PinnedCertificate: NSObject, URLSessionDelegate {
-    /// During pairing there is nothing to compare against yet: accept whatever is offered and
-    /// remember it, so the proof can be bound to it. The Mac is the one that decides whether that
-    /// certificate was really its own — if it was not, pairing fails and nothing is kept.
-    var learning = false
-    var learned: String?
-    private let expected: () -> String
-
-    init(expected: @escaping () -> String) { self.expected = expected }
-
-    func urlSession(_ session: URLSession,
-                    didReceive challenge: URLAuthenticationChallenge,
-                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-              let trust = challenge.protectionSpace.serverTrust else {
-            return completionHandler(.performDefaultHandling, nil)
-        }
-        guard let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate],
-              let leaf = chain.first else {
-            return completionHandler(.cancelAuthenticationChallenge, nil)
-        }
-        let got = SHA256.hash(data: SecCertificateCopyData(leaf) as Data)
-            .map { String(format: "%02x", $0) }.joined()
-
-        if learning {
-            learned = got
-            return completionHandler(.useCredential, URLCredential(trust: trust))
-        }
-
-        let want = expected().lowercased()
-        guard !want.isEmpty else { return completionHandler(.cancelAuthenticationChallenge, nil) }
-        if got == want {
-            completionHandler(.useCredential, URLCredential(trust: trust))
-        } else {
-            completionHandler(.cancelAuthenticationChallenge, nil)
         }
     }
 }

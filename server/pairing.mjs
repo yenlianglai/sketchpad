@@ -1,31 +1,10 @@
-// Getting an iPad connected without typing anything: Bonjour so the app finds this computer on its
-// own, and a QR in the terminal for networks that block it.
+// What someone is told in order to connect an iPad.
+//
+// One place, because it is said in three: when the server starts, when `sketchpad pair` is run, and
+// when an agent is asked for a code. Wording that drifts between them is wording that stops being
+// true somewhere.
 
-import { networkInterfaces, hostname } from 'node:os'
-import { Bonjour } from 'bonjour-service'
-
-/// Tailscale hands out addresses from the carrier-grade NAT range, which nothing else on a home
-/// network uses. Spotting one needs no CLI and no dependency.
-const isTailnet = ip => {
-  const [a, b] = ip.split('.').map(Number)
-  return a === 100 && b >= 64 && b <= 127
-}
-const usable = a => a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254')
-
-/// Every address this machine can be reached on, best first: the local network, then the tailnet.
-///
-/// Both go in the pairing QR. On your own wifi the local address is direct and fast; away from it
-/// the tailnet address still works, over WireGuard, with no relay of ours in between. One scan
-/// covers being at home and being somewhere else.
-export function addresses() {
-  const all = Object.values(networkInterfaces()).flatMap(list => list ?? []).filter(usable)
-  const lan = all.filter(a => !isTailnet(a.address)).map(a => a.address)
-  const tailnet = all.filter(a => isTailnet(a.address)).map(a => a.address)
-  return { lan: lan[0] ?? 'localhost', tailnet: tailnet[0] ?? null, all: [...lan, ...tailnet] }
-}
-
-/// The address an iPad on the same network should use.
-export const lanIP = () => addresses().lan
+import { isTailnetAddress } from './addresses.mjs'
 
 /// What the iPad needs to be told, and what it works out for itself.
 ///
@@ -41,64 +20,44 @@ export function pairing({ host, port, code, expiresAt, alt = [] }) {
   }
 }
 
-/// Printed to stderr, never stdout: in stdio mode stdout is the MCP transport.
-export function printPairing({ host, port, code, alt = [], token }) {
-  const out = s => process.stderr.write(s + '\n')
+/// True when this copy was installed rather than cloned. An installed one has its commands on the
+/// PATH; a checkout only has its npm scripts.
+const isLinked = () => import.meta.url.includes('/node_modules/')
+
+/// How to set an agent up from here. Telling someone to run `sketchpad` when they cloned the repo
+/// is telling them to run something they do not have.
+export const setupCommand = ({ linked = isLinked() } = {}) =>
+  linked ? 'sketchpad install' : 'npm run setup'
+
+/// The lines shown to a person connecting an iPad. Returned rather than printed, so the same
+/// wording can go to a terminal or back to an agent to read out.
+export function pairingBanner({ host, port, code, alt = [], token, linked }) {
   const { host: address, alt: others } = pairing({ host, port, alt })
-  out('')
+  const lines = ['']
+
   if (code) {
-    out('  iPad    open Sketchpad and type this code:')
-    out('')
-    out(`      ${code}`)
-    out('')
-    out('          good for ten minutes, and for one iPad')
+    lines.push('  iPad    open Sketchpad and type this code:', '', `      ${code}`, '',
+      '          good for ten minutes, and for one iPad')
   } else if (token) {
-    out(`  iPad    open Sketchpad and enter this key:  ${token}`)
+    lines.push(`  iPad    open Sketchpad and enter this key:  ${token}`)
   } else {
-    out('  OPEN    no token: anyone on this network can read your canvas and this machine\'s files.')
+    lines.push("  OPEN    no token: anyone on this network can read your canvas and this machine's files.")
   }
-  out('')
-  out(`  Mac     ${address}${others.length ? `  ·  also ${others.join('  ')}` : ''}`)
-  out('          Sketchpad finds this on its own if your network allows it')
-  out('')
-  out('  Agent   sketchpad install')
-  out('')
-  if (alt.some(h => h && /^100\./.test(h))) {
-    out('  Tailnet this code also works away from this network, over Tailscale.')
-    out('')
+
+  lines.push('',
+    `  Mac     ${address}${others.length ? `  ·  also ${others.join('  ')}` : ''}`,
+    '          Sketchpad finds this on its own if your network allows it',
+    '',
+    `  Agent   ${setupCommand({ linked })}`,
+    '')
+
+  if (alt.some(isTailnetAddress)) {
+    lines.push('  Tailnet this code also works away from this network, over Tailscale.', '')
   }
+  return lines
 }
 
-/// Advertise `_sketchpad._tcp` so the app finds this computer without anyone typing an address.
-/// Pure JS rather than macOS's `dns-sd`, so this works on Windows and Linux too. Returns a stop
-/// function; a network that blocks multicast just means the app falls back to the QR.
-export function advertiseBonjour({ port, log = () => {} }) {
-  if (process.env.SKETCHPAD_NO_BONJOUR) return () => {}
-  const name = process.env.SKETCHPAD_NAME || `Sketchpad on ${hostname().replace(/\.local$/, '')}`
-
-  let bonjour, service
-  try {
-    bonjour = new Bonjour()
-    // probe: false because the library throws — rather than emits — when it finds the name taken,
-    // which would take the whole server down over a discovery convenience. Two servers advertising
-    // the same name just means the app offers you both.
-    service = bonjour.publish({ name, type: 'sketchpad', protocol: 'tcp', port, probe: false, txt: { path: '/' } })
-  } catch (err) {
-    log('bonjour unavailable:', err.message)
-    return () => {}
-  }
-  // Publishing probes the network asynchronously, so a clash or a blocked multicast arrives as an
-  // event long after this function returns. Unhandled, it would take the server down with it —
-  // and discovery is a convenience: the QR still works.
-  service?.on?.('error', err => log('bonjour unavailable:', err.message))
-
-  let stopped = false
-  const stop = () => {
-    if (stopped) return
-    stopped = true
-    try { bonjour.unpublishAll(() => bonjour.destroy()) } catch { /* going away anyway */ }
-  }
-  process.on('exit', stop)
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stop(); process.exit(0) })
-  return stop
+/// Printed to stderr, never stdout: in stdio mode stdout is the MCP transport.
+export function printPairing(options) {
+  process.stderr.write(pairingBanner(options).join('\n') + '\n')
 }

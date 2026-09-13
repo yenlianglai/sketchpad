@@ -14,7 +14,7 @@ import { join, basename, extname, isAbsolute } from 'node:path'
 export const LISTEN_GRACE_MS = 90_000
 /// How long a spooled file or reply is kept for an iPad that has not come back.
 export const SPOOL_TTL_MS = 24 * 60 * 60 * 1000
-export const PUBLISHABLE = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.pdf']
+const PUBLISHABLE = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.pdf']
 const MAX_FILE_BYTES = 50 * 1024 * 1024
 const MAX_PENDING_REPLIES = 50
 

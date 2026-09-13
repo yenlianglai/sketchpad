@@ -29,7 +29,7 @@ yet, so you sign the app yourself.
 
 ## Setup
 
-**1. Start the server.** It prints a pairing QR code and listens on port 8791.
+**1. Start the server.** It listens on port 8791 and prints a pairing code.
 
 ```bash
 git clone https://github.com/yenlianglai/sketchpad.git
@@ -44,7 +44,9 @@ No paths to type, and no terminal after this.
 npm run setup
 ```
 
-`npm run status` says what is running, registered and enabled. To undo it: `node scripts/cli.mjs uninstall`.
+`npm run status` says what is running, registered and enabled; `npm run pair` shows a fresh pairing
+code; `npm run sketchpad -- uninstall` undoes the setup. Run `npm link` once and all of these become
+`sketchpad status`, `sketchpad pair`, `sketchpad devices`, `sketchpad uninstall`.
 
 <details>
 <summary>Or install it yourself</summary>
@@ -67,8 +69,8 @@ cd ios && xcodegen generate && open Sketchpad.xcodeproj
 
 Pick your team under Signing & Capabilities, plug in the iPad, Run. Then tap **Pair with a code** and
 type the eight characters your Mac is showing — or just ask your agent for one. It pairs that iPad
-once and gives it a key of its own; `sketchpad devices` lists them, `sketchpad revoke <id>` takes one
-back.
+once and gives it a key of its own; `npm run sketchpad -- devices` lists them, and
+`npm run sketchpad -- revoke <id>` takes one back.
 
 **4. Draw.** Say `/sketchpad` to your agent, or just "listen to the iPad".
 
@@ -121,14 +123,14 @@ With a keyboard: `⌘↩` send, `⌘N` new sheet, `⌘\` panel, `⌘0` fit.
 
 The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/skills/sketchpad/SKILL.md).
 
-Three environment variables worth knowing:
+Four environment variables worth knowing:
 
 | Variable | Default | |
 | --- | --- | --- |
 | `SKETCHPAD_PORT` | `8791` | Your MCP config carries this port, so the server never moves it on its own. |
-| `SKETCHPAD_TOKEN` | generated | A token is made on first run and kept. The pairing QR carries it. |
+| `SKETCHPAD_TOKEN` | generated | Made on first run and kept. Paired iPads get their own keys. |
 | `SKETCHPAD_NO_TLS` | off | Serve plain http. Only sane behind something that already encrypts. |
-| `SKETCHPAD_URL` | `http://127.0.0.1:8791` | Where the stdio wrapper looks for the running server. |
+| `SKETCHPAD_URL` | `https://127.0.0.1:8791` | Where the stdio wrapper looks for the running server. |
 
 ---
 
@@ -147,8 +149,8 @@ Three environment variables worth knowing:
   derived from the code *and the certificate it was shown*, so someone sitting in the middle presents
   the wrong certificate, fails, and learns nothing. The iPad pins what it paired with.
 - **Works away from home, if you want it to.** Install [Tailscale](https://tailscale.com) on both
-  and the QR carries your tailnet address alongside the local one — the app tries each, so one
-  pairing covers both. Still no relay of ours: WireGuard, straight between your two machines.
+  and your tailnet address is offered alongside the local one — the app tries each, so one pairing
+  covers both. Still no relay of ours: WireGuard, straight between your two machines.
 - **No cloud, no account.** Without Tailscale it is the local network and nothing else.
 - **Sketchpad places diagrams, it does not render them.** Give it a PNG or SVG and it becomes a
   layer; an agent that wants to send a Mermaid chart needs its own way to turn one into an image.
