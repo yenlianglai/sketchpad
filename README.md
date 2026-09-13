@@ -106,7 +106,8 @@ cd ios && xcodegen generate && open Sketchpad.xcodeproj
 接上 iPad 按 Run。第一次 iPad 會問「允許尋找區域網路裝置」，要允許，Bonjour 才找得到 Mac。
 
 Mac 端一樣 `npm run web-only`。app 對 Mac 走 **8791 純 http**（`NSAllowsLocalNetworking`），不需要憑證，
-也不需要打 port：app 用 Bonjour 自己找到 Mac，首次啟動會顯示找到的機器讓你點。找不到時設定 › 進階可手動填 `IP:8791`。
+也不需要打 port：app 用 Bonjour 自己找到 Mac，首次啟動會顯示找到的機器讓你點。Bonjour 被擋（訪客網路、跨 VLAN）時，
+server 啟動時會在終端機印一個 QR code，app 裡按「Scan the QR code on your Mac」掃一下就配對好，token 也一起帶過去。
 模擬器版預設連 `127.0.0.1:8791`。
 
 server 啟動時會印出 agent 端要跑的那一行 `claude mcp add`。8791 被占用時不會偷偷換 port（換了會讓已註冊的 MCP url 失效），
@@ -148,25 +149,48 @@ npm run web-only
 
 兩種接法，state 是同一份，可以同時用。
 
-**A. stdio（推薦，不綁 provider、不用記 port、會自動把 server 拉起來）**
+**A. 一鍵註冊（推薦）**
+
+```bash
+npm run register            # 看看會改什麼
+npm run register -- --write # 寫進去
+```
+
+會自動偵測這台機器上的 Claude Code、Claude Desktop、Cursor、Windsurf、VS Code，把路徑算好寫進各自的設定檔（先備份、只合併不覆蓋）。沒裝的就跳過。
+
+**B. 當成 plugin 安裝**（Claude Code；連 `/sketchpad` skill 一起帶進去）
+
+```bash
+claude plugin marketplace add /絕對路徑/sketchpad
+claude plugin install sketchpad@sketchpad --scope user
+```
+
+**C. Claude Desktop 一鍵安裝包**
+
+```bash
+npx -y @anthropic-ai/mcpb pack . dist/sketchpad.mcpb
+```
+
+產生的 `.mcpb` 拖進 Claude Desktop 設定就裝好了，使用者不需要 node、不需要路徑。
+
+**D. 手動 stdio**
 
 `server/mcp-stdio.mjs` 是一個 stdio MCP server，它不是第二個 server：啟動時先找正在跑的 sketchpad，
 沒有就自己啟一個，然後把 `tools/list`、`tools/call` 轉給它的 `/mcp`。多個 client 同時開沒問題，
 它們都連到同一個 sketchpad，所以看到同一台 iPad。
 
 ```bash
-claude mcp add --scope user sketchpad -- node /絕對路徑/sketchpad/server/mcp-stdio.mjs
+npm link   # 讓 sketchpad-mcp 這個名字可以被叫到
+claude mcp add --scope user sketchpad -- sketchpad-mcp
 ```
 
-其他 client 用同一支程式，只是設定檔格式不同：
+其他 client 設定檔：
 
 ```json
-{ "mcpServers": { "sketchpad": { "command": "node", "args": ["/絕對路徑/sketchpad/server/mcp-stdio.mjs"] } } }
+{ "mcpServers": { "sketchpad": { "command": "sketchpad-mcp" } } }
 ```
 
-Claude Desktop、Cursor、Windsurf、VS Code、Codex CLI、Gemini CLI 都吃這個形狀；
-Google ADK 用 `StdioConnectionParams` 指同一個指令。**Claude Desktop 的 PATH 很乾淨，`node` 要寫絕對路徑**
-（`which node`）。
+**Claude Desktop 的 PATH 很乾淨**，那裡要用絕對路徑（`which sketchpad-mcp`），或直接用上面的 C。
 
 | 環境變數 | 作用 |
 | --- | --- |

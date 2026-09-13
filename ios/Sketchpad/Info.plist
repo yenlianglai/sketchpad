@@ -29,6 +29,8 @@
 	<array>
 		<string>_sketchpad._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>掃描電腦上顯示的 QR code 來配對。</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Sketchpad 需要在區域網路上找到並連線到你電腦上的 agent。</string>
 	<key>UIApplicationSceneManifest</key>

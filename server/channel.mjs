@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { networkInterfaces, hostname } from 'node:os'
 import { spawn } from 'node:child_process'
+import qrcode from 'qrcode-terminal'
 import { WebSocketServer } from 'ws'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -214,6 +215,9 @@ async function handle(req, res) {
       broadcast({ type: 'turn', turnId, text: body.text, pngPath, delivered, ts: Date.now() })
       return send(res, 200, JSON.stringify({ turnId, pngPath, delivered }), 'application/json')
     }
+    if (url.pathname === '/pair') {
+      return send(res, 200, JSON.stringify({ host: `${HOST_HINT}:${PORT + 1}`, token: TOKEN || null, url: pairingURL(PORT + 1) }), 'application/json')
+    }
     if (url.pathname === '/replies') {
       // What the iPad missed while it was disconnected.
       const since = Number(url.searchParams.get('since') || 0)
@@ -292,13 +296,29 @@ ol li{margin:8px 0}code{background:#eee;padding:2px 6px;border-radius:4px}</styl
   plain.on('upgrade', upgrade)
   plain.on('error', err => portError(err, PORT + 1))
   plain.listen(PORT + 1, '0.0.0.0', () => {
-    log('')
-    log(`  iPad:  nothing to set up — the app finds this Mac on the network`)
-    log(`  Agent: claude mcp add --scope user --transport http sketchpad http://localhost:${PORT + 1}/mcp`)
-    if (tls) log(`  Web UI cert: http://${HOST_HINT}:${PORT + 1}/cert`)
-    log('')
+    printPairing(PORT + 1)
     advertiseBonjour(PORT + 1)
   })
+}
+
+/// The iPad normally finds this Mac by itself; the QR is the fallback for networks that block
+/// Bonjour (guest wifi, separate VLANs) and the fastest way to hand over a token.
+function pairingURL(port) {
+  return `sketchpad://pair?host=${HOST_HINT}:${port}` + (TOKEN ? `&token=${encodeURIComponent(TOKEN)}` : '')
+}
+function printPairing(port) {
+  const url = pairingURL(port)
+  const raw = s => process.stderr.write(s + '\n')
+  raw('')
+  raw(`  iPad   scan this, or just open the app — it finds this Mac on the network`)
+  raw('')
+  qrcode.generate(url, { small: true }, q => raw(q.split('\n').map(l => '  ' + l).join('\n')))
+  raw(`  ${url}`)
+  raw('')
+  raw(`  Agent  claude mcp add --scope user sketchpad -- sketchpad-mcp`)
+  raw(`         (run \`npm link\` once in this repo so that name resolves)`)
+  if (tls) raw(`  Web UI cert: http://${HOST_HINT}:${port}/cert`)
+  raw('')
 }
 
 // The registered MCP url carries this port, so never silently move: say what is holding it.

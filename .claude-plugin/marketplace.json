@@ -1,0 +1,15 @@
+{
+  "name": "sketchpad",
+  "owner": {
+    "name": "Ryan Lai"
+  },
+  "plugins": [
+    {
+      "name": "sketchpad",
+      "description": "Draw on an iPad with an Apple Pencil and have your agent see it, answer, and draw back.",
+      "version": "0.3.0",
+      "source": "./"
+    }
+  ],
+  "description": "An iPad handwriting pad your coding agent can see and draw on."
+}

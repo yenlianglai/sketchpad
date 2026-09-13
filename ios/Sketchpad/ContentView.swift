@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var tab: DrawerTab = .turns
     @State private var unread = 0
     @State private var showSettings = false
+    @State private var showScanner = false
     @State private var previewTurn: Turn?
     @State private var selectedLayerID: UUID?
     @State private var layerMode = false
@@ -46,7 +47,7 @@ struct ContentView: View {
 
     @ViewBuilder private var connectionCard: some View {
         if settings.host.isEmpty {
-            ConnectionCard(discovered: conn.discovered, onPick: { settings.host = $0 }, onManual: { showSettings = true })
+            ConnectionCard(discovered: conn.discovered, onPick: { settings.host = $0 }, onScan: { showScanner = true }, onManual: { showSettings = true })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.trailing, rightInset)
         }
@@ -80,7 +81,15 @@ struct ContentView: View {
             Task { for r in await conn.missedReplies(since: lastReplyTs) { handleReply(r) } }
         }
         .onChange(of: showSettings) { _, shown in if !shown && !layerMode { canvasController.setToolPickerVisible(true) } }
-        .sheet(isPresented: $showSettings) { SettingsView().environmentObject(settings).environmentObject(conn) }
+        .sheet(isPresented: $showSettings) { SettingsView(onScan: { showSettings = false; showScanner = true }).environmentObject(settings).environmentObject(conn) }
+        .sheet(isPresented: $showScanner) {
+            QRScannerSheet { host, token in
+                settings.host = host
+                if let token { settings.token = token }
+                conn.reconnectNow()
+                showFlash("Paired with \(host)")
+            }
+        }
         .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }
     }
 

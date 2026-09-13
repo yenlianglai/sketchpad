@@ -8,3 +8,6 @@ ios/build/
 ios/*.xcodeproj/xcuserdata/
 ios/*.xcodeproj/project.xcworkspace/xcuserdata/
 ios/build-device/
+dist/
+manifest.json
+.sketchpad-server.log

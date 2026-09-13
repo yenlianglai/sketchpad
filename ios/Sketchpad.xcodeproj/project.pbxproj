@@ -13,6 +13,7 @@
 		3367A50B00011648EBE2EF91 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0C86C586FA2411F65CCBCE7 /* Models.swift */; };
 		52623790AF8980281682BF31 /* ServerConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174F5814B810E56DBB486170 /* ServerConnection.swift */; };
 		5344DA013F11F6A0BF374138 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39EF633D5F393E123E6361C1 /* Settings.swift */; };
+		719316EECC7E1673C8F6AC4F /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBF324F1804467D6D607D673 /* QRScanner.swift */; };
 		79AC6DE959935BB91DF11E79 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DA319B7A0ABEA2F42EEF6E4 /* ContentView.swift */; };
 		7F84624131C533373F710CD2 /* LayerHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514EFB18FF2E83CD66251213 /* LayerHostView.swift */; };
 		830D1B94A05B4304DE4F8B2B /* ReplyQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039553C37D1F5E91955EA437 /* ReplyQueue.swift */; };
@@ -36,6 +37,7 @@
 		74A1C02BC436487CB30DCB62 /* Sketchpad.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Sketchpad.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8AF9CA4D0417B10AB050A75C /* CanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasView.swift; sourceTree = "<group>"; };
 		ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerOverlay.swift; sourceTree = "<group>"; };
+		BBF324F1804467D6D607D673 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
 		BE399589066DF03F9B44CBC3 /* DrawerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerViews.swift; sourceTree = "<group>"; };
 		C43E4564781061F22876585D /* SketchpadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SketchpadApp.swift; sourceTree = "<group>"; };
 		D4B4C7EF300C5CE855CAF200 /* LayerModeOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerModeOverlay.swift; sourceTree = "<group>"; };
@@ -63,6 +65,7 @@
 				D4B4C7EF300C5CE855CAF200 /* LayerModeOverlay.swift */,
 				ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */,
 				F0C86C586FA2411F65CCBCE7 /* Models.swift */,
+				BBF324F1804467D6D607D673 /* QRScanner.swift */,
 				039553C37D1F5E91955EA437 /* ReplyQueue.swift */,
 				174F5814B810E56DBB486170 /* ServerConnection.swift */,
 				39EF633D5F393E123E6361C1 /* Settings.swift */,
@@ -148,6 +151,7 @@
 				FBA455FBE54A2E53C7AACE7D /* LayerModeOverlay.swift in Sources */,
 				E2C3A299941BD2C557137CD5 /* LayerOverlay.swift in Sources */,
 				3367A50B00011648EBE2EF91 /* Models.swift in Sources */,
+				719316EECC7E1673C8F6AC4F /* QRScanner.swift in Sources */,
 				830D1B94A05B4304DE4F8B2B /* ReplyQueue.swift in Sources */,
 				928B7AA06CE142B39FA641B5 /* SVGStrokes.swift in Sources */,
 				52623790AF8980281682BF31 /* ServerConnection.swift in Sources */,

@@ -286,6 +286,7 @@ struct TurnPreview: View {
 // MARK: - Settings
 
 struct SettingsView: View {
+    var onScan: () -> Void
     @EnvironmentObject var settings: Settings
     @EnvironmentObject var conn: ServerConnection
     @Environment(\.dismiss) var dismiss
@@ -324,6 +325,7 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button { onScan() } label: { Label("Scan QR code to pair", systemImage: "qrcode.viewfinder") }
                     DisclosureGroup("Advanced", isExpanded: $showManual) {
                         TextField("Address (e.g. 192.168.0.128:8791)", text: $settings.host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                         TextField("Token", text: $settings.token).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -340,6 +342,7 @@ struct SettingsView: View {
 struct ConnectionCard: View {
     let discovered: [String]
     var onPick: (String) -> Void
+    var onScan: () -> Void
     var onManual: () -> Void
     var body: some View {
         VStack(spacing: 14) {
@@ -355,6 +358,11 @@ struct ConnectionCard: View {
                         .buttonStyle(.borderedProminent).tint(.black).controlSize(.large)
                 }
             }
+            let scan = Button { onScan() } label: {
+                Label("Scan the QR code on your Mac", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
+            }
+            .controlSize(.large)
+            if discovered.isEmpty { scan.buttonStyle(.borderedProminent).tint(.black) } else { scan.buttonStyle(.bordered) }
             Button("Enter an address instead", action: onManual).font(.subheadline)
         }
         .padding(28).frame(maxWidth: 420)
