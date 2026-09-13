@@ -24,8 +24,10 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
         UIRequiresFullScreen: false
-        NSLocalNetworkUsageDescription: Sketchpad 需要在區域網路上找到並連線到你電腦上的 agent。
-        NSCameraUsageDescription: 掃描電腦上顯示的 QR code 來配對。
+        NSLocalNetworkUsageDescription: Sketchpad connects to the agent running on your own computer. Nothing leaves your network.
+        # Answered here rather than by hand on every App Store submission. The app uses TLS and the
+        # platform's own crypto, which is exempt.
+        ITSAppUsesNonExemptEncryption: false
         NSBonjourServices:
           - _sketchpad._tcp
         NSAppTransportSecurity:
