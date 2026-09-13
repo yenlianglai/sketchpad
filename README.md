@@ -143,7 +143,10 @@ Three environment variables worth knowing:
 - **Nobody can listen in.** Traffic is TLS. There is no certificate authority for a laptop on a home
   network, so the Mac signs its own and the QR carries its fingerprint — the iPad pins that and
   refuses anything else, which is what stops someone on the same wifi sitting in the middle.
-- **Same network only.** No relay, no cloud, no account.
+- **Works away from home, if you want it to.** Install [Tailscale](https://tailscale.com) on both
+  and the QR carries your tailnet address alongside the local one — the app tries each, so one
+  pairing covers both. Still no relay of ours: WireGuard, straight between your two machines.
+- **No cloud, no account.** Without Tailscale it is the local network and nothing else.
 - **Sketchpad places diagrams, it does not render them.** Give it a PNG or SVG and it becomes a
   layer; an agent that wants to send a Mermaid chart needs its own way to turn one into an image.
 

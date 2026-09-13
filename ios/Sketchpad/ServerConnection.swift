@@ -175,8 +175,25 @@ final class ServerConnection: NSObject, ObservableObject {
         }
     }
 
+    /// Every address this Mac said it answers on. Away from home the local one is dead and the
+    /// tailnet one works; at home it is the other way round. Rather than asking which network you
+    /// are on, try them in turn.
+    private func rotateHost() {
+        guard let s = settings, !s.altHosts.isEmpty else { return }
+        var ring = [s.host] + s.altHosts
+        guard let i = ring.firstIndex(of: s.host) else { return }
+        let next = ring[(i + 1) % ring.count]
+        guard next != s.host else { return }
+        ring.removeAll { $0 == next }
+        s.host = next
+        s.altHosts = ring
+    }
+
     private func scheduleReconnect() {
         reconnectTask?.cancel()
+        // One full pass over the addresses before slowing down, so a move between networks is
+        // picked up in seconds rather than after the backoff has stretched out.
+        rotateHost()
         let delay = reconnectDelay
         reconnectDelay = min(reconnectDelay * 2, 15)
         reconnectTask = Task { [weak self] in

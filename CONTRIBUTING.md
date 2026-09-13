@@ -14,7 +14,7 @@ server/
   state.mjs         what is in flight: the queue, questions for the iPad, the spool
   tools.mjs         the seven MCP tools, over state
   routes.mjs        the http surface, including /mcp
-  pairing.mjs       Bonjour and the terminal QR
+  pairing.mjs       Bonjour, the addresses this machine answers on, and the terminal QR
   mcp-stdio.mjs     stdio entry point; finds or starts the shared server
   plugin-entry.mjs  the same, with a dependency install for plugin installs
 ios/

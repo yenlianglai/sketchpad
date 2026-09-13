@@ -14,6 +14,9 @@ final class Settings: ObservableObject {
     /// sha256 of the Mac's self-signed certificate, taken from the pairing QR. Empty means plain
     /// http — there is no certificate authority on a home network, so this is what trust rests on.
     @Published var fingerprint: String { didSet { d.set(fingerprint, forKey: "fingerprint") } }
+    /// Other addresses the same Mac answers on — a tailnet address, typically. Tried in turn when
+    /// the first will not connect, so one pairing covers being at home and being away.
+    @Published var altHosts: [String] { didSet { d.set(altHosts, forKey: "altHosts") } }
     /// Fingers pan and zoom, only the Pencil draws. Off lets a finger draw, for iPads without a Pencil.
     @Published var pencilOnly: Bool { didSet { d.set(pencilOnly, forKey: "pencilOnly") } }
     @Published var paper: Paper { didSet { d.set(paper.rawValue, forKey: "paper") } }
@@ -27,6 +30,7 @@ final class Settings: ObservableObject {
         host = d.string(forKey: "host") ?? defaultHost
         token = d.string(forKey: "token") ?? ""
         fingerprint = d.string(forKey: "fingerprint") ?? ""
+        altHosts = d.stringArray(forKey: "altHosts") ?? []
         pencilOnly = d.object(forKey: "pencilOnly") as? Bool ?? true
         paper = Paper(rawValue: d.string(forKey: "paper") ?? "") ?? .plain
     }

@@ -5,13 +5,28 @@ import { networkInterfaces, hostname } from 'node:os'
 import qrcode from 'qrcode-terminal'
 import { Bonjour } from 'bonjour-service'
 
-/// The address an iPad on the same network should use. Skips loopback and self-assigned addresses.
-export function lanIP() {
-  for (const addresses of Object.values(networkInterfaces()))
-    for (const a of addresses ?? [])
-      if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254')) return a.address
-  return 'localhost'
+/// Tailscale hands out addresses from the carrier-grade NAT range, which nothing else on a home
+/// network uses. Spotting one needs no CLI and no dependency.
+const isTailnet = ip => {
+  const [a, b] = ip.split('.').map(Number)
+  return a === 100 && b >= 64 && b <= 127
 }
+const usable = a => a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254')
+
+/// Every address this machine can be reached on, best first: the local network, then the tailnet.
+///
+/// Both go in the pairing QR. On your own wifi the local address is direct and fast; away from it
+/// the tailnet address still works, over WireGuard, with no relay of ours in between. One scan
+/// covers being at home and being somewhere else.
+export function addresses() {
+  const all = Object.values(networkInterfaces()).flatMap(list => list ?? []).filter(usable)
+  const lan = all.filter(a => !isTailnet(a.address)).map(a => a.address)
+  const tailnet = all.filter(a => isTailnet(a.address)).map(a => a.address)
+  return { lan: lan[0] ?? 'localhost', tailnet: tailnet[0] ?? null, all: [...lan, ...tailnet] }
+}
+
+/// The address an iPad on the same network should use.
+export const lanIP = () => addresses().lan
 
 /// What the QR encodes. A `code` is exchanged for a key of the device's own; a `token` is that key
 /// directly, which is what a server running without pairing (SKETCHPAD_NO_TOKEN) has to fall back on.
@@ -19,22 +34,26 @@ export function lanIP() {
 /// directly, which is what a server running without pairing has to fall back on. `fp` is the
 /// certificate fingerprint the iPad pins — the reason a self-signed certificate is safe here is that
 /// this arrives by a channel nobody on the network can touch.
-export function pairingURL({ host, port, token, code, scheme = 'http', fingerprint }) {
+export function pairingURL({ host, port, token, code, scheme = 'http', fingerprint, alt = [] }) {
   const parts = [`host=${host}:${port}`]
+  // Other addresses the same machine answers on — a tailnet address, typically, so one scan works
+  // both at home and away. The app tries them in order.
+  const others = alt.filter(h => h && h !== host).map(h => `${h}:${port}`)
+  if (others.length) parts.push(`alt=${encodeURIComponent(others.join(','))}`)
   if (code) parts.push(`code=${encodeURIComponent(code)}`)
   else if (token) parts.push(`token=${encodeURIComponent(token)}`)
   if (scheme !== 'http') parts.push(`scheme=${scheme}`)
   if (fingerprint) parts.push(`fp=${fingerprint}`)
   return {
     host: `${host}:${port}`, token: token || null, code: code || null,
-    scheme, fingerprint: fingerprint || null,
+    alt: others, scheme, fingerprint: fingerprint || null,
     url: `sketchpad://pair?${parts.join('&')}`
   }
 }
 
 /// Printed to stderr, never stdout: in stdio mode stdout is the MCP transport.
-export function printPairing({ host, port, token, code, scheme, fingerprint }) {
-  const { url } = pairingURL({ host, port, token, code, scheme, fingerprint })
+export function printPairing({ host, port, token, code, scheme, fingerprint, alt = [] }) {
+  const { url } = pairingURL({ host, port, token, code, scheme, fingerprint, alt })
   const out = s => process.stderr.write(s + '\n')
   out('')
   out('  iPad    open Sketchpad — it finds this computer on the network. Or scan:')
@@ -44,6 +63,10 @@ export function printPairing({ host, port, token, code, scheme, fingerprint }) {
   out('')
   out('  Agent   sketchpad install')
   out('')
+  if (alt.some(h => h && /^100\./.test(h))) {
+    out('  Tailnet this code also works away from this network, over Tailscale.')
+    out('')
+  }
   // The QR carries the token, so the only thing worth saying is whether there is one.
   out(code
     ? `  Locked  this code pairs one iPad, once, within ten minutes.${fingerprint ? ' Encrypted.' : ''}`

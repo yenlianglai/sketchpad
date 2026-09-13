@@ -4,7 +4,7 @@ import AVFoundation
 /// Camera QR scanner for pairing. Accepts what the Mac prints at startup
 /// (`sketchpad://pair?host=…&code=…`) and also a bare `192.168.0.9:8791` or `http://…`.
 struct QRScannerSheet: View {
-    var onPaired: (String, Credential?, String) -> Void
+    var onPaired: (String, Credential?, String, [String]) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var denied = false
 
@@ -37,7 +37,7 @@ struct QRScannerSheet: View {
     private func handle(_ code: String) {
         guard let (host, credential) = Self.parse(code) else { return }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        onPaired(host, credential, Self.fingerprint(code))
+        onPaired(host, credential, Self.fingerprint(code), Self.alternates(code))
         dismiss()
     }
 
@@ -45,6 +45,15 @@ struct QRScannerSheet: View {
     static func fingerprint(_ code: String) -> String {
         URLComponents(string: code.trimmingCharacters(in: .whitespacesAndNewlines))?
             .queryItems?.first { $0.name == "fp" }?.value?.lowercased() ?? ""
+    }
+
+    /// Other addresses the same Mac answers on, in the order the Mac suggested.
+    static func alternates(_ code: String) -> [String] {
+        (URLComponents(string: code.trimmingCharacters(in: .whitespacesAndNewlines))?
+            .queryItems?.first { $0.name == "alt" }?.value ?? "")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     /// What the QR hands over. A `code` is exchanged for this iPad's own key and is good once;

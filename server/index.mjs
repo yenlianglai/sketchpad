@@ -11,7 +11,7 @@ import { createServer as createHttpsServer } from 'node:https'
 import { createHub } from './hub.mjs'
 import { createState } from './state.mjs'
 import { createRoutes } from './routes.mjs'
-import { advertiseBonjour, lanIP, pairingURL, printPairing } from './pairing.mjs'
+import { addresses, advertiseBonjour, lanIP, pairingURL, printPairing } from './pairing.mjs'
 import { loadOrCreateToken, makeAuthorizer } from './auth.mjs'
 import { spoolDir, configDir } from './paths.mjs'
 import { createDevices } from './devices.mjs'
@@ -25,7 +25,10 @@ const SPOOL_DIR = spoolDir()
 const PORT = Number(process.env.SKETCHPAD_PORT ?? 8791)
 // Generated on first run and kept, so there is no unprotected default. SKETCHPAD_NO_TOKEN=1 opts out.
 const { token: TOKEN } = loadOrCreateToken()
-const HOST = process.env.SKETCHPAD_HOST || lanIP()
+const ADDRESSES = addresses()
+const HOST = process.env.SKETCHPAD_HOST || ADDRESSES.lan
+// Reachable from the tailnet as well, so one pairing covers being away from this network.
+const ALT = ADDRESSES.all.filter(a => a !== HOST)
 const QUIET = process.env.SKETCHPAD_QUIET === '1'
 
 const log = (...args) => console.error('[sketchpad]', ...args)
@@ -44,7 +47,9 @@ hub.onGreeting(() => ({ type: 'hello', listening: state.isListening() }))
 // Encrypted by default. SKETCHPAD_NO_TLS=1 drops back to plain http, which is only reasonable on a
 // network you control or a tunnel that already encrypts (Tailscale, say).
 const TLS = process.env.SKETCHPAD_NO_TLS !== '1'
-const tls = TLS ? await loadOrCreateCert({ dir: configDir(), hosts: [HOST] }) : null
+// Every address the certificate has to be valid for, or dialling the tailnet one would fail the
+// name check even with the right fingerprint.
+const tls = TLS ? await loadOrCreateCert({ dir: configDir(), hosts: [HOST, ...ALT] }) : null
 const SCHEME = TLS ? 'https' : 'http'
 
 const devices = createDevices({ dir: configDir() })
@@ -52,7 +57,7 @@ const authorize = makeAuthorizer({ token: TOKEN, devices, allowRemoteMCP: proces
 const handler = createRoutes({
   state, hub, devices,
   authorize,
-  pairingURL: code => pairingURL({ host: HOST, port: PORT, token: TOKEN, code, scheme: SCHEME, fingerprint: tls?.fingerprint }),
+  pairingURL: code => pairingURL({ host: HOST, port: PORT, token: TOKEN, code, scheme: SCHEME, fingerprint: tls?.fingerprint, alt: ALT }),
   log: QUIET ? () => {} : log
 })
 const server = TLS ? createHttpsServer({ cert: tls.cert, key: tls.key }, handler) : createHttpServer(handler)
@@ -74,7 +79,7 @@ server.listen(PORT, '0.0.0.0', () => {
   if (!QUIET) printPairing({
     host: HOST, port: PORT, token: TOKEN,
     code: TOKEN ? devices.mintCode().code : null,
-    scheme: SCHEME, fingerprint: tls?.fingerprint
+    scheme: SCHEME, fingerprint: tls?.fingerprint, alt: ALT
   })
   advertiseBonjour({ port: PORT, log })
 })

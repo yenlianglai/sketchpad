@@ -90,3 +90,42 @@ describe('the fingerprint', () => {
     assert.ok(!url.includes('token='), 'the long-lived key should never be printed when a code will do')
   })
 })
+
+describe('reaching the Mac from somewhere else', () => {
+  test('the tailnet address travels in the QR alongside the local one', () => {
+    const { url, alt } = pairingURL({
+      host: '192.168.1.5', port: 8791, code: 'abc', scheme: 'https', fingerprint: 'ab',
+      alt: ['100.64.1.9']
+    })
+    assert.deepEqual(alt, ['100.64.1.9:8791'])
+    assert.ok(url.includes('alt=100.64.1.9%3A8791'), url)
+  })
+
+  test('the local address stays first, because at home it is the direct one', () => {
+    const { host, alt } = pairingURL({ host: '192.168.1.5', port: 8791, alt: ['100.64.1.9'] })
+    assert.equal(host, '192.168.1.5:8791')
+    assert.deepEqual(alt, ['100.64.1.9:8791'])
+  })
+
+  test('the primary address is not repeated as an alternate', () => {
+    const { alt } = pairingURL({ host: '192.168.1.5', port: 8791, alt: ['192.168.1.5', '100.64.1.9'] })
+    assert.deepEqual(alt, ['100.64.1.9:8791'])
+  })
+
+  test('no second address means no alt at all, rather than an empty one', () => {
+    assert.ok(!pairingURL({ host: '192.168.1.5', port: 8791 }).url.includes('alt='))
+  })
+})
+
+describe('spotting a tailnet address', () => {
+  test('the carrier-grade NAT range is Tailscale; ordinary private ranges are not', async () => {
+    const { addresses } = await import('../server/pairing.mjs')
+    const found = addresses()
+    // Whatever this machine has, the split must be consistent: nothing can be in both lists.
+    assert.equal(found.all.includes(found.lan) || found.lan === 'localhost', true)
+    if (found.tailnet) {
+      assert.match(found.tailnet, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./)
+      assert.notEqual(found.lan, found.tailnet)
+    }
+  })
+})
