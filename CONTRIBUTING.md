@@ -17,7 +17,9 @@ server/
 ios/
   Sketchpad/        the app
   SketchpadTests/   unit tests
-scripts/register.mjs   writes MCP client configs
+scripts/
+  register.mjs      writes MCP client configs
+  clients.mjs       where each MCP client keeps its config, per platform
 test/                  server tests
 ```
 
@@ -57,12 +59,15 @@ npm test           # server: units and two end-to-end suites
 npm run test:ios   # the app, in a simulator
 ```
 
-Four suites, and they are deliberately different shapes:
+The suites are deliberately different shapes:
 
 - `test/state.test.mjs` — the queue, asking the iPad, the spool, the listening light. Pure, no ports.
 - `test/tools.test.mjs` — the MCP tools through a real client over an in-memory transport.
 - `test/http.test.mjs` — a real server process, a real MCP client, a stand-in iPad on the WebSocket.
 - `test/stdio.test.mjs` — the wrapper, spawned the way a desktop client spawns it.
+- `test/auth.test.mjs` — who gets in. Every case here was once allowed.
+- `test/platform.test.mjs` — the paths that differ per platform, checked against a stand-in home,
+  since the suite only ever runs on one platform at a time.
 - `ios/SketchpadTests` — the two pure functions that fail silently when they are wrong: the
   SVG-to-strokes parser and the pairing-QR parser.
 

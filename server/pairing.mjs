@@ -1,9 +1,9 @@
 // Getting an iPad connected without typing anything: Bonjour so the app finds this computer on its
 // own, and a QR in the terminal for networks that block it.
 
-import { spawn } from 'node:child_process'
 import { networkInterfaces, hostname } from 'node:os'
 import qrcode from 'qrcode-terminal'
+import { Bonjour } from 'bonjour-service'
 
 /// The address an iPad on the same network should use. Skips loopback and self-assigned addresses.
 export function lanIP() {
@@ -37,14 +37,35 @@ export function printPairing({ host, port, token, tokenSource }) {
   out('')
 }
 
-/// macOS ships dns-sd, which is all this needs. Elsewhere the app falls back to the QR or a typed
-/// address. Returns a stop function.
+/// Advertise `_sketchpad._tcp` so the app finds this computer without anyone typing an address.
+/// Pure JS rather than macOS's `dns-sd`, so this works on Windows and Linux too. Returns a stop
+/// function; a network that blocks multicast just means the app falls back to the QR.
 export function advertiseBonjour({ port, log = () => {} }) {
-  if (process.platform !== 'darwin' || process.env.SKETCHPAD_NO_BONJOUR) return () => {}
+  if (process.env.SKETCHPAD_NO_BONJOUR) return () => {}
   const name = process.env.SKETCHPAD_NAME || `Sketchpad on ${hostname().replace(/\.local$/, '')}`
-  const child = spawn('dns-sd', ['-R', name, '_sketchpad._tcp', '.', String(port), 'path=/'], { stdio: 'ignore' })
-  child.on('error', err => log('bonjour unavailable:', err.message))
-  const stop = () => { try { child.kill() } catch {} }
+
+  let bonjour, service
+  try {
+    bonjour = new Bonjour()
+    // probe: false because the library throws — rather than emits — when it finds the name taken,
+    // which would take the whole server down over a discovery convenience. Two servers advertising
+    // the same name just means the app offers you both.
+    service = bonjour.publish({ name, type: 'sketchpad', protocol: 'tcp', port, probe: false, txt: { path: '/' } })
+  } catch (err) {
+    log('bonjour unavailable:', err.message)
+    return () => {}
+  }
+  // Publishing probes the network asynchronously, so a clash or a blocked multicast arrives as an
+  // event long after this function returns. Unhandled, it would take the server down with it —
+  // and discovery is a convenience: the QR still works.
+  service?.on?.('error', err => log('bonjour unavailable:', err.message))
+
+  let stopped = false
+  const stop = () => {
+    if (stopped) return
+    stopped = true
+    try { bonjour.unpublishAll(() => bonjour.destroy()) } catch { /* going away anyway */ }
+  }
   process.on('exit', stop)
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stop(); process.exit(0) })
   return stop

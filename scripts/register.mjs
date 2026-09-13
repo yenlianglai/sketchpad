@@ -9,9 +9,9 @@
 
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { mcpClients, whichCommand } from './clients.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const ENTRY = join(ROOT, 'server', 'mcp-stdio.mjs')
@@ -21,20 +21,15 @@ const NAME = 'sketchpad'
 // Prefer the globally linked name when it resolves, so configs stay portable.
 function command() {
   try {
-    const p = execFileSync('sh', ['-lc', 'command -v sketchpad-mcp'], { encoding: 'utf8' }).trim()
+    const { file, args } = whichCommand('sketchpad-mcp')
+    const p = execFileSync(file, args, { encoding: 'utf8' }).trim().split(/\r?\n/)[0]
     if (p) return { command: p, args: [] }
   } catch {}
   return { command: process.execPath, args: [ENTRY] }
 }
 const CMD = command()
 
-const clients = [
-  { id: 'claude-code', label: 'Claude Code', kind: 'cli' },
-  { id: 'claude-desktop', label: 'Claude Desktop', kind: 'json', path: join(homedir(), 'Library/Application Support/Claude/claude_desktop_config.json'), key: 'mcpServers' },
-  { id: 'cursor', label: 'Cursor', kind: 'json', path: join(homedir(), '.cursor/mcp.json'), key: 'mcpServers' },
-  { id: 'windsurf', label: 'Windsurf', kind: 'json', path: join(homedir(), '.codeium/windsurf/mcp_config.json'), key: 'mcpServers' },
-  { id: 'vscode', label: 'VS Code', kind: 'json', path: join(homedir(), 'Library/Application Support/Code/User/mcp.json'), key: 'servers' }
-]
+const clients = mcpClients()
 
 const say = (...a) => console.log(...a)
 let changed = 0, skipped = 0
