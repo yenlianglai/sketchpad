@@ -10,7 +10,9 @@
     "web-only": "node server/channel.mjs --driver=none",
     "test:mcp": "node scripts/test-mcp-client.mjs",
     "test:sketchpad": "node scripts/test-sketchpad-mcp.mjs",
-    "cert": "sh scripts/gen-cert.sh"
+    "cert": "sh scripts/gen-cert.sh",
+    "mcp": "node server/mcp-stdio.mjs",
+    "test:stdio": "node scripts/test-stdio-wrapper.mjs"
   },
   "engines": {
     "node": ">=22.12"
@@ -19,5 +21,8 @@
     "@modelcontextprotocol/sdk": "^1.20.0",
     "ws": "^8.18.0",
     "zod": "^4.6.2"
+  },
+  "bin": {
+    "sketchpad-mcp": "./server/mcp-stdio.mjs"
   }
 }

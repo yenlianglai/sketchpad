@@ -144,14 +144,45 @@ server 端在 `inbox/turns.json` 保留每回合的紀錄（頁面、時間、�
 npm run web-only
 ```
 
-Claude Code 端，加一次即可在所有專案使用：
+### 接上 agent
+
+兩種接法，state 是同一份，可以同時用。
+
+**A. stdio（推薦，不綁 provider、不用記 port、會自動把 server 拉起來）**
+
+`server/mcp-stdio.mjs` 是一個 stdio MCP server，它不是第二個 server：啟動時先找正在跑的 sketchpad，
+沒有就自己啟一個，然後把 `tools/list`、`tools/call` 轉給它的 `/mcp`。多個 client 同時開沒問題，
+它們都連到同一個 sketchpad，所以看到同一台 iPad。
+
+```bash
+claude mcp add --scope user sketchpad -- node /絕對路徑/sketchpad/server/mcp-stdio.mjs
+```
+
+其他 client 用同一支程式，只是設定檔格式不同：
+
+```json
+{ "mcpServers": { "sketchpad": { "command": "node", "args": ["/絕對路徑/sketchpad/server/mcp-stdio.mjs"] } } }
+```
+
+Claude Desktop、Cursor、Windsurf、VS Code、Codex CLI、Gemini CLI 都吃這個形狀；
+Google ADK 用 `StdioConnectionParams` 指同一個指令。**Claude Desktop 的 PATH 很乾淨，`node` 要寫絕對路徑**
+（`which node`）。
+
+| 環境變數 | 作用 |
+| --- | --- |
+| `SKETCHPAD_URL` | 共用 server 的位址，預設 `http://127.0.0.1:8791` |
+| `SKETCHPAD_NO_AUTOSTART=1` | 找不到 server 時不要自己啟動 |
+
+**B. 直接連 HTTP**（server 已經在跑、或 agent 不在這台機器上）
 
 ```bash
 claude mcp add --scope user --transport http sketchpad http://localhost:8791/mcp
 ```
 
-然後在任何 Claude Code session 說「/sketchpad」或「聽 iPad」。repo 內附 `.claude/skills/sketchpad/SKILL.md`
-描述這個 loop；複製到 `~/.claude/skills/` 就能全域使用。ADK 端用 `MCPToolset` 指向同一個 URL。
+ADK 端用 `MCPToolset` 指同一個 URL。
+
+接好之後在任何 session 說「/sketchpad」或「聽 iPad」。repo 內附 `.claude/skills/sketchpad/SKILL.md`
+描述這個 loop；複製到 `~/.claude/skills/` 就能全域使用。
 
 `wait_for_turn` 預設等 50 秒後回「no turn」讓 agent 再呼叫一次；若 MCP tool timeout 較短可調 `timeout_seconds`。
 
