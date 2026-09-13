@@ -133,3 +133,17 @@ describe('a login item that cannot start', () => {
     assert.match(forPlatform('linux').contents, /RestartSec=\d+/)
   })
 })
+
+describe('telling whether it is really set to start', () => {
+  test('macOS and Linux offer a way to ask the system, not just the filesystem', () => {
+    // A file on disk is not a job the system knows about: it can be written and never loaded, or
+    // booted out and left behind. `status` said "yes" to both, which is the one case where you most
+    // need to be told otherwise.
+    assert.ok(forPlatform('darwin').check.args.includes('print'))
+    assert.ok(forPlatform('linux').check.args.join(' ').includes('is-enabled'))
+  })
+
+  test('Windows has nothing to ask, because the file is the mechanism', () => {
+    assert.equal(forPlatform('win32').check, null)
+  })
+})

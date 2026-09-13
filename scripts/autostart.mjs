@@ -42,7 +42,10 @@ export function autostartPlan({
 </plist>
 `,
       enable: [{ file: 'launchctl', args: ['bootstrap', `gui/${process.getuid?.() ?? 501}`, path] }],
-      disable: [{ file: 'launchctl', args: ['bootout', `gui/${process.getuid?.() ?? 501}/${LABEL}`] }]
+      disable: [{ file: 'launchctl', args: ['bootout', `gui/${process.getuid?.() ?? 501}/${LABEL}`] }],
+      // A plist on disk is not a job launchd knows about: it can be written and never loaded, or
+      // booted out and left behind. Asking launchd is the only honest answer.
+      check: { file: 'launchctl', args: ['print', `gui/${process.getuid?.() ?? 501}/${LABEL}`] }
     }
   }
 
@@ -54,7 +57,8 @@ export function autostartPlan({
       platform, path, kind: 'startup-folder',
       contents: `@echo off\r\nstart "" /b "${node}" "${entry}"\r\n`,
       enable: [],      // being in the folder is the whole mechanism
-      disable: []
+      disable: [],
+      check: null      // …so the file being there is also the whole answer
     }
   }
 
@@ -77,6 +81,7 @@ WantedBy=default.target
       { file: 'systemctl', args: ['--user', 'daemon-reload'] },
       { file: 'systemctl', args: ['--user', 'enable', '--now', 'sketchpad.service'] }
     ],
-    disable: [{ file: 'systemctl', args: ['--user', 'disable', '--now', 'sketchpad.service'] }]
+    disable: [{ file: 'systemctl', args: ['--user', 'disable', '--now', 'sketchpad.service'] }],
+    check: { file: 'systemctl', args: ['--user', 'is-enabled', 'sketchpad.service'] }
   }
 }

@@ -83,6 +83,19 @@ function uninstall() {
   say('MCP client configs were left alone — remove the "sketchpad" entry by hand if you want it gone.')
 }
 
+/// Whether it will really start at login. The file existing is not the same as the system having
+/// been told about it — it can be written and never loaded, or booted out and left behind.
+function describeAutostart(plan) {
+  if (!existsSync(plan.path)) return 'no'
+  if (!plan.check) return `yes (${plan.path})`
+  try {
+    execFileSync(plan.check.file, plan.check.args, { stdio: 'pipe' })
+    return `yes (${plan.path})`
+  } catch {
+    return `installed but not loaded — run \`sketchpad install\` again  (${plan.path})`
+  }
+}
+
 async function status() {
   const p = plan()
   const health = await running()
@@ -94,7 +107,7 @@ async function status() {
     say(`server        ${health ? `running on ${PORT}` : 'not running'}`)
   }
   if (health && !health.refused) say(`iPad          ${health.clients > 0 ? `${health.clients} connected` : 'not connected'}`)
-  say(`at login      ${existsSync(p.path) ? `yes (${p.path})` : 'no'}`)
+  say(`at login      ${describeAutostart(p)}`)
   say(`token         ${loadOrCreateToken().source}`)
   const paired = await ask('/devices')
   if (Array.isArray(paired)) say(`paired        ${paired.length ? paired.map(d => d.name).join(', ') : 'nothing yet'}`)
