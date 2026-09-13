@@ -89,7 +89,7 @@ export const TOOLS = [
   },
   {
     name: 'sketchpad_status',
-    description: 'Whether an iPad is connected, which page it has open, and how many pages are waiting.',
+    description: 'Whether an iPad is connected, which page it has open, how many pages are waiting, and how many agents are listening. agents_waiting above 1 means another agent is competing for the next page and may take it instead of you.',
     inputSchema: { type: 'object', properties: {} }
   }
 ]
@@ -197,6 +197,7 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, log = (
         clients: clientCount(),
         pending_turns: state.pending(),
         agent_listening: state.isListening(),
+        agents_waiting: state.waiting(),
         current_page: state.currentBoard,
         last_turn_id: state.lastTurn?.turnId ?? null
       }))

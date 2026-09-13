@@ -163,6 +163,34 @@ describe('state', () => {
     })
   })
 
+  describe('more than one agent listening', () => {
+    test('a page goes to exactly one of them', async () => {
+      const first = state.takeTurn(500)
+      const second = state.takeTurn(500)
+      state.pushTurn(page('shared'))
+      const [a, b] = await Promise.all([first, second])
+      const got = [a, b].filter(Boolean)
+      assert.equal(got.length, 1, 'two agents must not both act on the same page')
+      assert.equal(got[0].turnId, 'shared')
+    })
+
+    test('and the count is visible, so an agent can tell it is competing', async () => {
+      assert.equal(state.waiting(), 0)
+      const waits = [state.takeTurn(300), state.takeTurn(300)]
+      assert.equal(state.waiting(), 2)
+      await Promise.all(waits)
+      assert.equal(state.waiting(), 0, 'giving up should not leave a waiter behind')
+    })
+
+    test('two pages reach two agents, one each', async () => {
+      const waits = [state.takeTurn(500), state.takeTurn(500)]
+      state.pushTurn(page('one'))
+      state.pushTurn(page('two'))
+      const ids = (await Promise.all(waits)).filter(Boolean).map(t => t.turnId).sort()
+      assert.deepEqual(ids, ['one', 'two'])
+    })
+  })
+
   describe('the open page', () => {
     test('follows whichever page the iPad last sent from', () => {
       state.pushTurn(page('o', { boardId: 'B9', boardTitle: 'Login flow' }))

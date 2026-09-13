@@ -110,7 +110,8 @@ export function createRoutes({ state, hub, devices, authorize, pairing, log = ()
       if (url.pathname === '/health') {
         return json(res, {
           ok: true, clients: hub.clientCount(),
-          pending_turns: state.pending(), agent_listening: state.isListening()
+          pending_turns: state.pending(), agent_listening: state.isListening(),
+          agents_waiting: state.waiting()
         })
       }
 

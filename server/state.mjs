@@ -170,6 +170,9 @@ export function createState({ broadcast, clientCount, spoolDir, now = () => Date
     publishFile, spooledFile, prune,
     pending: () => queue.length,
     isListening: () => listening,
+    /// How many agents are blocked in wait_for_turn right now. More than one means they are
+    /// competing for the next page, and only one of them will get it.
+    waiting: () => waiters.length,
     get lastTurn() { return lastTurn },
     get currentBoard() { return currentBoard }
   }

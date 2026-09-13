@@ -135,6 +135,9 @@ The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/sk
 - **The agent looks busy while it listens.** `wait_for_turn` blocks, so that session shows as running
   a tool. Almost free in tokens, but you cannot type into it meanwhile — treat it as a mode you
   switch on and off.
+- **One page goes to one agent.** If two are listening, whichever asked first takes it and the other
+  keeps waiting — they do not both act on your drawing. `sketchpad_status` reports how many are
+  listening, so an agent can tell it is competing.
 - **Your drawings live on the iPad.** The Mac forgets a page once it has handed it over, which is why
   looking back needs the iPad awake.
 - **Locked and encrypted by default.** Only iPads you have paired can connect, each with its own key;

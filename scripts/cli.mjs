@@ -26,6 +26,10 @@ const ENTRY = join(ROOT, 'server', 'index.mjs')
 const REGISTER = join(ROOT, 'scripts', 'register.mjs')
 const PORT = Number(process.env.SKETCHPAD_PORT ?? 8791)
 
+// `sketchpad status | head -2` closes the pipe early; without this that surfaces as an unhandled
+// EPIPE and a stack trace, which reads as the tool being broken rather than the pipe ending.
+process.stdout.on('error', err => { if (err.code === 'EPIPE') process.exit(0); throw err })
+
 const say = (...a) => console.log(...a)
 const plan = () => autostartPlan({ entry: ENTRY, home: homedir(), configHome: configHome() })
 
