@@ -6,6 +6,7 @@ import { basename, extname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { buildMcpServer } from './tools.mjs'
+import { agentFromHeaders } from './agents.mjs'
 
 const MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
@@ -27,15 +28,20 @@ const json = (res, value) => send(res, 200, JSON.stringify(value), 'application/
 
 const stripDataURL = s => s.replace(/^data:image\/png;base64,/, '')
 
-export function createRoutes({ state, hub, devices, authorize, pairing, log = () => {} }) {
+export function createRoutes({ state, hub, devices, agents, authorize, pairing, log = () => {} }) {
   /// Stateless Streamable HTTP: a fresh transport and server per request, all sharing one state.
   async function handleMCP(req, res) {
     let body
     if (req.method === 'POST') {
       try { body = JSON.parse((await readBody(req)).toString('utf8')) } catch { return send(res, 400, 'invalid json') }
     }
+    // Which agent this request speaks for. Null when it is shut out, or when something older than
+    // this wrapper is talking to us.
+    const agent = agents.seen(agentFromHeaders(req.headers))
+    if (!agent && agentFromHeaders(req.headers)) return send(res, 403, 'that agent has been disconnected from the iPad')
+
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    const server = buildMcpServer({ state, broadcast: hub.broadcast, clientCount: hub.clientCount, devices, log })
+    const server = buildMcpServer({ state, broadcast: hub.broadcast, clientCount: hub.clientCount, devices, agents, agent, log })
     res.on('close', () => { transport.close(); server.close() })
     await server.connect(transport)
     await transport.handleRequest(req, res, body)
@@ -53,7 +59,9 @@ export function createRoutes({ state, hub, devices, authorize, pairing, log = ()
     }
     state.pushTurn({
       turnId, text: body.text, pngPath, pngBase64, strokes: body.strokes,
-      boardId: body.boardId, boardTitle: body.boardTitle, ts: Date.now()
+      boardId: body.boardId, boardTitle: body.boardTitle, ts: Date.now(),
+      // Addressed to one agent when the person picked one; anyone may take it otherwise.
+      agentId: body.agentId || null
     })
     log(`page ${turnId}  "${(body.text || '').slice(0, 40)}"  ${body.strokes ?? '?'} new strokes`)
     hub.broadcast({ type: 'turn', turnId, ts: Date.now() })
@@ -97,6 +105,17 @@ export function createRoutes({ state, hub, devices, authorize, pairing, log = ()
       if (url.pathname === '/pair') {
         const fresh = url.searchParams.get('new') === '1' ? devices.mintCode() : null
         return json(res, pairing(fresh?.formatted ?? devices.pendingCode(), fresh?.expiresAt ?? devices.expiresAt()))
+      }
+
+      // The agents currently listening, and shutting one out — both from the iPad.
+      if (url.pathname === '/agents') {
+        if (req.method === 'DELETE') {
+          const id = url.searchParams.get('id') ?? ''
+          if (!agents.block(id)) return send(res, 404, 'no such agent')
+          log(`agent ${id} disconnected from the iPad`)
+          return json(res, { blocked: id })
+        }
+        return json(res, agents.list())
       }
 
       if (url.pathname === '/devices') {

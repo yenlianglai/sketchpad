@@ -2,6 +2,15 @@ import Foundation
 import Combine
 import UIKit
 
+/// An agent on the other end. Named by whatever the client called itself at connect time — a label
+/// to recognise it by, not proof of anything.
+struct Agent: Identifiable, Equatable {
+    var id: String
+    var name: String
+    var version: String
+    var waiting: Bool
+}
+
 /// A file the agent handed back with a reply.
 struct ReplyFile { var kind: String; var name: String; var svg: String?; var remoteURL: URL?; var layer: Bool }
 struct Reply { var id: String; var ts: Double; var text: String; var turnId: String?; var files: [ReplyFile] }
@@ -19,6 +28,8 @@ final class ServerConnection: NSObject, ObservableObject {
     @Published var agentReady = false
     /// An agent is actually blocked in wait_for_turn (or polled moments ago).
     @Published var agentListening = false
+    /// Everything currently connected, so you can see what you are talking to — and cut one off.
+    @Published var agents: [Agent] = []
     @Published var discovered: [String] = []
     @Published var lastError: String?
 
@@ -183,6 +194,7 @@ final class ServerConnection: NSObject, ObservableObject {
                     self.status = .disconnected
                     self.agentReady = false
                     self.agentListening = false
+                    self.agents = []
                     self.lastError = err.localizedDescription
                     self.scheduleReconnect()
                 }
@@ -233,8 +245,10 @@ final class ServerConnection: NSObject, ObservableObject {
         case "hello", "mcp":
             agentReady = (m["ready"] as? Bool) ?? (m["mcp"] as? Bool) ?? false
             if let l = m["listening"] as? Bool { agentListening = l }
+            if let rows = m["agents"] as? [[String: Any]] { agents = rows.compactMap(Self.parseAgent) }
         case "agents":
             agentListening = m["listening"] as? Bool ?? false
+            if let rows = m["agents"] as? [[String: Any]] { agents = rows.compactMap(Self.parseAgent) }
         case "reply":
             onEvent?(.reply(parseReply(m)))
         case "taken":
@@ -265,6 +279,24 @@ final class ServerConnection: NSObject, ObservableObject {
         }
         return Reply(id: m["id"] as? String ?? UUID().uuidString, ts: (m["ts"] as? Double ?? 0) / 1000,
                      text: m["text"] as? String ?? "", turnId: m["turnId"] as? String, files: files)
+    }
+
+    private static func parseAgent(_ m: [String: Any]) -> Agent? {
+        guard let id = m["id"] as? String else { return nil }
+        return Agent(id: id,
+                     name: m["name"] as? String ?? "an agent",
+                     version: m["version"] as? String ?? "",
+                     waiting: m["waiting"] as? Bool ?? false)
+    }
+
+    /// Cut an agent off. It stops being able to reach this iPad until the computer's server restarts.
+    func disconnect(_ agent: Agent) async {
+        guard let base = baseURL else { return }
+        var c = URLComponents(url: base.appendingPathComponent("agents"), resolvingAgainstBaseURL: false)
+        c?.queryItems = [URLQueryItem(name: "id", value: agent.id)]
+        guard let url = c?.url else { return }
+        _ = try? await session.data(for: authorized(url, method: "DELETE"))
+        agents.removeAll { $0.id == agent.id }
     }
 
     /// Replies the server broadcast while this iPad was not connected.

@@ -14,6 +14,7 @@ struct ContentView: View {
     @State var unread = 0
     @State var showSettings = false
     @State var showPairing = false
+    @State var showAgents = false
     @State var previewTurn: Turn?
     @State var selectedLayerID: UUID?
     @State var layerMode = false
@@ -96,6 +97,7 @@ struct ContentView: View {
         .sheet(isPresented: $showPairing) {
             PairingSheet().environmentObject(settings).environmentObject(conn)
         }
+        .sheet(isPresented: $showAgents) { AgentsView().environmentObject(conn) }
         .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }
     }
 
@@ -229,6 +231,10 @@ struct ContentView: View {
                 Divider()
                 Button { store.newBoard() } label: { Label("New page", systemImage: "plus") }
                 Button { showDrawer = true; tab = .pages } label: { Label("All pages…", systemImage: "square.grid.2x2") }
+                Divider()
+                Button { showAgents = true } label: {
+                    Label(conn.agents.isEmpty ? "Agents…" : "Agents (\(conn.agents.count))…", systemImage: "antenna.radiowaves.left.and.right")
+                }
             } label: {
                 HStack(spacing: 10) {
                     Circle().fill(conn.status == .connected ? (conn.agentListening ? Color.green : Color.orange) : Color.red).frame(width: 8, height: 8)
@@ -271,7 +277,12 @@ struct ContentView: View {
         switch conn.status {
         case .connected:
             if store.currentTurns.last?.taken == true, store.currentTurns.last?.agentText == nil { return "agent reading…" }
-            return conn.agentListening ? "agent listening" : "nobody listening"
+            let listening = conn.agents.filter(\.waiting)
+            switch listening.count {
+            case 0: return conn.agentListening ? "agent listening" : "nobody listening"
+            case 1: return "\(listening[0].name) listening"
+            default: return "\(listening.count) agents listening"
+            }
         case .connecting: return "connecting…"
         case .disconnected: return "offline"
         }

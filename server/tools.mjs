@@ -118,7 +118,7 @@ const summariseTurn = t =>
   `note=${JSON.stringify(t.text || '')}  replies=${t.replies?.length ?? 0}` +
   (t.replies?.length ? ' (' + t.replies.map(r => r.kind || 'text').join(', ') + ')' : '')
 
-export function buildMcpServer({ state, broadcast, clientCount, devices, log = () => {} }) {
+export function buildMcpServer({ state, broadcast, clientCount, devices, agents = null, agent = null, log = () => {} }) {
   const server = new Server({ name: 'sketchpad', version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
@@ -126,7 +126,13 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, log = (
   const handlers = {
     async sketchpad_wait_for_turn(a) {
       const seconds = Math.min(Math.max(Number(a.timeout_seconds ?? 50), 1), 600)
-      const turn = await state.takeTurn(seconds * 1000)
+      agents?.setWaiting(agent?.id, true)
+      let turn
+      try {
+        turn = await state.takeTurn(seconds * 1000, agent?.id ?? null)
+      } finally {
+        agents?.setWaiting(agent?.id, false)
+      }
       if (!turn) return text(`no turn within ${seconds}s (ipad_connected=${clientCount() > 0}). Call again to keep listening.`)
       broadcast({ type: 'taken', turnId: turn.turnId })
       const content = [{ type: 'text', text: describeTurn(turn, state.pending()) }]
@@ -198,6 +204,8 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, log = (
         pending_turns: state.pending(),
         agent_listening: state.isListening(),
         agents_waiting: state.waiting(),
+        you: agent ? { id: agent.id, name: agent.name } : null,
+        other_agents: (agents?.list() ?? []).filter(x => x.id !== agent?.id).map(x => ({ name: x.name, waiting: x.waiting })),
         current_page: state.currentBoard,
         last_turn_id: state.lastTurn?.turnId ?? null
       }))

@@ -49,13 +49,24 @@ export function createState({ broadcast, clientCount, spoolDir, now = () => Date
     lastTurn = turn
     if (turn.boardId) currentBoard = { id: turn.boardId, title: turn.boardTitle || currentBoard?.title || '' }
     queue.push(turn)
-    waiters.shift()?.()
+    // Offer it around: a waiter it is not addressed to declines, and the next one is asked.
+    for (const wake of [...waiters]) if (wake()) break
   }
 
-  /// Resolves with the next page, or null if none arrives in time.
-  function takeTurn(timeoutMs) {
+  /// The first page this agent is allowed to take: anything unaddressed, or addressed to it.
+  ///
+  /// A page the person sent to one agent in particular stays in the queue until that agent asks for
+  /// it, rather than being taken by whoever happened to be listening.
+  function claim(agentId) {
+    const i = queue.findIndex(t => !t.agentId || t.agentId === agentId)
+    return i < 0 ? null : queue.splice(i, 1)[0]
+  }
+
+  /// Resolves with the next page this agent may have, or null if none arrives in time.
+  function takeTurn(timeoutMs, agentId = null) {
     touchListening()
-    if (queue.length) return Promise.resolve(queue.shift())
+    const ready = claim(agentId)
+    if (ready) return Promise.resolve(ready)
     return new Promise(resolve => {
       const finish = value => {
         const i = waiters.indexOf(wake)
@@ -64,7 +75,13 @@ export function createState({ broadcast, clientCount, spoolDir, now = () => Date
         resolve(value)
       }
       const timer = setTimeout(() => finish(null), timeoutMs)
-      const wake = () => { clearTimeout(timer); finish(queue.shift() ?? null) }
+      const wake = () => {
+        const mine = claim(agentId)
+        if (!mine) return false      // addressed to someone else; keep waiting
+        clearTimeout(timer)
+        finish(mine)
+        return true
+      }
       waiters.push(wake)
       touchListening()
     })

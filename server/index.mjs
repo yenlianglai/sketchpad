@@ -16,6 +16,7 @@ import { pairing, printPairing } from './pairing.mjs'
 import { loadOrCreateToken, makeAuthorizer } from './auth.mjs'
 import { spoolDir, configDir } from './paths.mjs'
 import { createDevices } from './devices.mjs'
+import { createAgents } from './agents.mjs'
 import { loadOrCreateCert } from './tls.mjs'
 
 // Nothing durable lives here. The iPad keeps the pages; this is only what is in flight — a page an
@@ -43,7 +44,7 @@ const state = createState({
 state.prune()
 
 // An iPad that connects mid-session should see the current state, not a blank one.
-hub.onGreeting(() => ({ type: 'hello', listening: state.isListening() }))
+hub.onGreeting(() => ({ type: 'hello', listening: state.isListening(), agents: agents.list() }))
 
 // Encrypted by default. SKETCHPAD_NO_TLS=1 drops back to plain http, which is only reasonable on a
 // network you control or behind something that already encrypts.
@@ -55,9 +56,11 @@ const SCHEME = TLS ? 'https' : 'http'
 
 // A pairing proof is bound to this server's certificate, so devices has to know it.
 const devices = createDevices({ dir: configDir(), fingerprint: () => tls?.fingerprint ?? '' })
+// Who is listening, shown on the iPad so a person can see — and shut out — what they are talking to.
+const agents = createAgents({ broadcast: hub.broadcast })
 const authorize = makeAuthorizer({ token: TOKEN, devices, allowRemoteMCP: process.env.SKETCHPAD_MCP_REMOTE === '1' })
 const handler = createRoutes({
-  state, hub, devices,
+  state, hub, devices, agents,
   authorize,
   pairing: (code, expiresAt) => pairing({ host: HOST, port: PORT, code, expiresAt, alt: ALT }),
   log: QUIET ? () => {} : log

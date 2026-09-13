@@ -22,6 +22,7 @@ import { loadOrCreateToken } from './auth.mjs'
 import { spoolDir, serverLogPath } from './paths.mjs'
 import { localFetch, localURL } from './local-fetch.mjs'
 import { VERSION } from './version.mjs'
+import { randomUUID } from 'node:crypto'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
@@ -72,23 +73,54 @@ async function ensureServer() {
   return false
 }
 
+// Who this wrapper is speaking for. The shared server sees one connection per wrapper, so without
+// this every agent would look like the proxy — and the person on the iPad could not tell Claude Code
+// from Cursor, let alone shut one of them out.
+const AGENT_ID = randomUUID()
+const agentHeaders = () => {
+  const client = server.getClientVersion?.()   // what the client called itself at initialize
+  return {
+    'x-sketchpad-agent-id': AGENT_ID,
+    'x-sketchpad-agent-name': encodeURIComponent(client?.name ?? 'an agent'),
+    'x-sketchpad-agent-version': encodeURIComponent(client?.version ?? '')
+  }
+}
+
 let upstream = null
 async function connectUpstream() {
   if (upstream) return upstream
   const client = new Client({ name: 'sketchpad-stdio-proxy', version: VERSION })
   await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), {
-    requestInit: { headers: AUTH },
-    fetch: (input, init) => fetchLocal(input, init)
+    // Rebuilt per request: the client only identifies itself once initialize has been answered,
+    // which is after this connection is first made. Merged through Headers rather than spread —
+    // the transport passes a Headers object, and spreading one of those silently yields nothing,
+    // taking its Accept header with it.
+    fetch: (input, init) => {
+      const headers = new Headers(init?.headers ?? {})
+      for (const [k, v] of Object.entries({ ...AUTH, ...agentHeaders() })) headers.set(k, v)
+      return fetchLocal(input, { ...init, headers })
+    }
   }))
   upstream = client
   return client
 }
 function dropUpstream() { try { upstream?.close() } catch {} upstream = null }
 
+/// Being shut out by the person on the iPad is not the same as the server being down, and an agent
+/// that cannot tell the two apart will sit there retrying something it has been told to stop.
+function describeFailure(err) {
+  const message = String(err?.message ?? '')
+  if (/\b403\b/.test(message) || /disconnected from the iPad/.test(message)) {
+    return 'The person disconnected this agent from their iPad. Stop calling sketchpad tools and tell them, in case it was not deliberate.'
+  }
+  return `sketchpad is not reachable at ${BASE}: ${message}`
+}
+
 async function withUpstream(fn) {
   try {
     return await fn(await connectUpstream())
   } catch (err) {
+    if (/\b403\b/.test(String(err?.message ?? ''))) throw err   // shut out; retrying changes nothing
     // One retry: the shared server may have been restarted under us.
     dropUpstream()
     await ensureServer()
@@ -115,7 +147,7 @@ server.setRequestHandler(CallToolRequestSchema, async req => {
     return await withUpstream(c => c.callTool({ name: req.params.name, arguments: req.params.arguments ?? {} }, undefined, { timeout: 660_000 }))
   } catch (err) {
     log('tools/call failed:', req.params.name, err.message)
-    return { content: [{ type: 'text', text: `sketchpad is not reachable at ${BASE}: ${err.message}` }], isError: true }
+    return { content: [{ type: 'text', text: describeFailure(err) }], isError: true }
   }
 })
 
