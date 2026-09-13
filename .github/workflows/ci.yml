@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test
+        run: npm test
+        env:
+          SKETCHPAD_NO_BONJOUR: '1'
+
+  app:
+    name: iPad app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Generate the Xcode project
+        working-directory: ios
+        run: xcodegen generate
+      - name: Pick an iPad simulator
+        id: sim
+        run: |
+          name=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys; ds=json.load(sys.stdin)['devices']; print(next(d['name'] for v in ds.values() for d in v if 'iPad' in d['name']))")
+          echo "Using $name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - name: Test
+        working-directory: ios
+        run: |
+          xcodebuild test \
+            -project Sketchpad.xcodeproj -scheme Sketchpad \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet
+
+  bundle:
+    name: MCP bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Proves the manifest and the pack step still work, so a release never fails on them.
+      - run: npm run bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sketchpad-mcpb
+          path: dist/*.mcpb

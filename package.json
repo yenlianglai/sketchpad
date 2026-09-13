@@ -8,10 +8,9 @@
     "start": "node server/index.mjs",
     "register": "node scripts/register.mjs",
     "bundle": "npx -y @anthropic-ai/mcpb pack . dist/sketchpad.mcpb",
-    "test": "node scripts/test-mcp.mjs && node scripts/test-stdio.mjs",
-    "test:mcp": "node scripts/test-mcp.mjs",
-    "test:stdio": "node scripts/test-stdio.mjs",
-    "test:ios": "cd ios && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -project Sketchpad.xcodeproj -scheme Sketchpad -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -derivedDataPath build CODE_SIGNING_ALLOWED=NO"
+    "test": "node --test test/*.test.mjs",
+    "test:ios": "cd ios && xcodegen generate && DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer} xcodebuild test -project Sketchpad.xcodeproj -scheme Sketchpad -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet",
+    "app": "cd ios && xcodegen generate && open Sketchpad.xcodeproj"
   },
   "engines": {
     "node": ">=22.12"

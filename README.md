@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <img alt="CI" src="https://github.com/ryanlai/sketchpad/actions/workflows/ci.yml/badge.svg">
   <img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-server-5A45FF">
   <img alt="iPadOS 17+" src="https://img.shields.io/badge/iPadOS-17%2B-black">
@@ -132,6 +133,7 @@ The loop an agent should run is in [`.claude/skills/sketchpad/SKILL.md`](.claude
 
 ---
 
-This is a side project, used daily by exactly one person. Issues and patches welcome.
+This is a side project, used daily by exactly one person. Issues and patches welcome —
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the layout and how to run the tests.
 
 MIT
