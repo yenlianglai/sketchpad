@@ -118,3 +118,18 @@ describe('Linux', () => {
     assert.ok(plan.enable[1].args.includes('enable'))
   })
 })
+
+describe('a login item that cannot start', () => {
+  test('backs off instead of restarting in a tight loop', () => {
+    // An older server still holding the port makes this exit at once. KeepAlive would then restart
+    // it immediately, forever, filling the log and burning CPU for as long as the clash lasts.
+    const plan = forPlatform('darwin')
+    assert.match(plan.contents, /<key>ThrottleInterval<\/key>\s*<integer>(\d+)<\/integer>/)
+    const seconds = Number(plan.contents.match(/<key>ThrottleInterval<\/key>\s*<integer>(\d+)<\/integer>/)[1])
+    assert.ok(seconds >= 10, `${seconds}s is still a spin`)
+  })
+
+  test('Linux backs off too', () => {
+    assert.match(forPlatform('linux').contents, /RestartSec=\d+/)
+  })
+})

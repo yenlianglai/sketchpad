@@ -37,13 +37,19 @@ let changed = 0, skipped = 0
 for (const c of clients) {
   if (c.kind === 'cli') {
     let has = false, cli = true
-    try { has = execFileSync('claude', ['mcp', 'list'], { encoding: 'utf8' }).includes(`${NAME}:`) }
-    catch { cli = false }
+    try {
+      // Anchored: a plugin supplies "plugin:sketchpad:sketchpad", which is a different registration
+      // and must not be mistaken for a user-scope one we are about to replace.
+      const listed = execFileSync('claude', ['mcp', 'list'], { encoding: 'utf8' })
+      has = listed.split('\n').some(line => line.startsWith(`${NAME}:`))
+    } catch { cli = false }
     if (!cli) { say(`·  ${c.label}: not installed`); skipped++; continue }
     const argv = ['mcp', 'add', '--scope', 'user', NAME, '--', CMD.command, ...CMD.args]
     if (!WRITE) { say(`→  ${c.label}: ${has ? 'replace existing' : 'add'}  (claude ${argv.join(' ')})`); changed++; continue }
     try {
-      if (has) execFileSync('claude', ['mcp', 'remove', '--scope', 'user', NAME], { stdio: 'ignore' })
+      // Remove first so adding cannot collide, but a failed remove is not a reason to skip the add:
+      // there may simply have been nothing at this scope to remove.
+      if (has) { try { execFileSync('claude', ['mcp', 'remove', '--scope', 'user', NAME], { stdio: 'ignore' }) } catch {} }
       execFileSync('claude', argv, { stdio: 'ignore' })
       say(`✓  ${c.label}: registered`)
       changed++

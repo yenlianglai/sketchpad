@@ -84,3 +84,27 @@ describe('discovery', () => {
     }
   })
 })
+
+describe('spotting an existing Claude Code registration', () => {
+  // `claude mcp list` prints one line per server. A plugin contributes
+  // "plugin:sketchpad:sketchpad", which is a different registration from a user-scope "sketchpad" —
+  // mistaking one for the other made register try to remove something that was not there, and the
+  // failure took the whole registration down with it.
+  const isUserScope = listing => listing.split('\n').some(line => line.startsWith('sketchpad:'))
+
+  test('a plugin entry is not a user-scope entry', () => {
+    assert.equal(isUserScope('plugin:sketchpad:sketchpad: node /x/plugin-entry.mjs - ✔ Connected'), false)
+  })
+
+  test('a user-scope entry is', () => {
+    assert.equal(isUserScope('sketchpad: /usr/local/bin/sketchpad-mcp - ✔ Connected'), true)
+  })
+
+  test('both at once still counts as registered', () => {
+    assert.equal(isUserScope('plugin:sketchpad:sketchpad: node /x\nsketchpad: /usr/local/bin/sketchpad-mcp'), true)
+  })
+
+  test('an unrelated server is not mistaken for ours', () => {
+    assert.equal(isUserScope('sketchpad-helper: /x\nother: /y'), false)
+  })
+})

@@ -42,7 +42,10 @@ const run = ({ file, args }) => {
   }
 }
 
-/// Anything the running server can answer. Null when it is not running.
+/// Anything the running server can answer. Null when nothing is there; `{ refused }` when something
+/// is, but will not have us — an older server still holding the port, typically, with a token that
+/// no longer matches the one on disk. Reporting that as "not running" sends you looking in the
+/// wrong place entirely.
 const ask = async (path, init = {}) => {
   const { token } = loadOrCreateToken()
   try {
@@ -51,7 +54,8 @@ const ask = async (path, init = {}) => {
       headers: { ...(init.headers ?? {}), ...(token ? { authorization: `Bearer ${token}` } : {}) },
       signal: AbortSignal.timeout(1500)
     })
-    return res.ok ? await res.json() : null
+    if (res.ok) return res.json()
+    return res.status === 401 ? { refused: true } : null
   } catch { return null }
 }
 const running = () => ask('/health')
@@ -82,12 +86,18 @@ function uninstall() {
 async function status() {
   const p = plan()
   const health = await running()
-  say(`server        ${health ? `running on ${PORT}` : 'not running'}`)
-  if (health) say(`iPad          ${health.clients > 0 ? `${health.clients} connected` : 'not connected'}`)
+  if (health?.refused) {
+    say(`server        something is on ${PORT} but will not accept this machine's token`)
+    say(`              probably an older sketchpad still running — find it with:`)
+    say(`                lsof -nP -iTCP:${PORT} -sTCP:LISTEN`)
+  } else {
+    say(`server        ${health ? `running on ${PORT}` : 'not running'}`)
+  }
+  if (health && !health.refused) say(`iPad          ${health.clients > 0 ? `${health.clients} connected` : 'not connected'}`)
   say(`at login      ${existsSync(p.path) ? `yes (${p.path})` : 'no'}`)
   say(`token         ${loadOrCreateToken().source}`)
   const paired = await ask('/devices')
-  if (paired) say(`paired        ${paired.length ? paired.map(d => d.name).join(', ') : 'nothing yet'}`)
+  if (Array.isArray(paired)) say(`paired        ${paired.length ? paired.map(d => d.name).join(', ') : 'nothing yet'}`)
 }
 
 /// A fresh code every time: showing a QR is asking for one more device, and the old code should

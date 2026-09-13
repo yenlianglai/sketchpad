@@ -34,6 +34,9 @@ export function autostartPlan({
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
+  <!-- Something else holding the port makes this exit immediately; without a throttle launchd
+       would restart it in a tight loop for as long as that lasts. -->
+  <key>ThrottleInterval</key><integer>30</integer>
   <key>ProcessType</key><string>Background</string>
 </dict>
 </plist>
