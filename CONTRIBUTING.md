@@ -73,7 +73,7 @@ wiring it up fails.
 ## Releasing
 
 Tag `vX.Y.Z`. CI runs the tests, packs `dist/sketchpad.mcpb`, and attaches it to the release.
-Bump the version in `package.json`, `.claude-plugin/plugin.json` and `mcpb/manifest.json` together.
+Bump the version in `package.json`, `.claude-plugin/plugin.json` and `manifest.json` together.
 
 ## Brand
 

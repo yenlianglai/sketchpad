@@ -2,7 +2,6 @@ node_modules/
 dist/
 inbox/
 outbox/
-manifest.json
 *.log
 
 ios/build/
