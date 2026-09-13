@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.svg" width="92" alt="">
+</p>
+
 <h1 align="center">Sketchpad</h1>
 
 <p align="center">

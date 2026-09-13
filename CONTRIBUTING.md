@@ -74,3 +74,17 @@ wiring it up fails.
 
 Tag `vX.Y.Z`. CI runs the tests, packs `dist/sketchpad.mcpb`, and attaches it to the release.
 Bump the version in `package.json`, `.claude-plugin/plugin.json` and `mcpb/manifest.json` together.
+
+## Brand
+
+One stroke that starts as your ink and finishes as the agent's. Ink `#1C1C1E`, agent `#C7552B`,
+paper white — the accent appears only where the agent has touched something.
+
+`docs/logo.svg` is the mark on its own; `docs/icon.svg` is the full-bleed app icon it is cut from.
+The iPad icon set in `ios/Sketchpad/Assets.xcassets` is rendered from that SVG:
+
+```bash
+for px in 20 29 40 58 76 80 152 167 1024; do
+  rsvg-convert -w $px -h $px -o ios/Sketchpad/Assets.xcassets/AppIcon.appiconset/icon-$px.png docs/icon.svg
+done
+```
