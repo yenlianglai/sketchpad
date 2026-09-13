@@ -15,8 +15,8 @@ jobs:
     name: Server
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -30,7 +30,7 @@ jobs:
     name: iPad app
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: brew install xcodegen
       - name: Generate the Xcode project
         working-directory: ios
@@ -54,15 +54,15 @@ jobs:
     name: MCP bundle
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       # Proves the manifest and the pack step still work, so a release never fails on them.
       - run: npm run bundle
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: sketchpad-mcpb
           path: dist/*.mcpb

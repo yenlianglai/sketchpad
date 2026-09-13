@@ -52,6 +52,10 @@
       "description": "Name the current page."
     },
     {
+      "name": "sketchpad_pairing_code",
+      "description": "Get a pairing code to read out to the person so they can connect an iPad."
+    },
+    {
       "name": "sketchpad_status",
       "description": "Is an iPad connected."
     }

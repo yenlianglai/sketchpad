@@ -93,3 +93,19 @@ describe('nothing describes a feature that was removed', () => {
     assert.ok(!pkg.dependencies['qrcode-terminal'])
   })
 })
+
+describe('the Claude Desktop bundle manifest', () => {
+  test('describes the same tools the server offers', () => {
+    // It is metadata, so nothing fails when it drifts — it just quietly starts describing an older
+    // version of the thing people installed.
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8'))
+    assert.deepEqual(manifest.tools.map(t => t.name), TOOLS.map(t => t.name))
+  })
+
+  test('and carries the same version as the package', () => {
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8'))
+    const plugin = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'plugin.json'), 'utf8'))
+    assert.equal(manifest.version, pkg.version, 'manifest.json and package.json disagree')
+    assert.equal(plugin.version, pkg.version, 'plugin.json and package.json disagree')
+  })
+})
