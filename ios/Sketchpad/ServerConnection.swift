@@ -46,17 +46,27 @@ final class ServerConnection: NSObject, ObservableObject {
         guard let host = settings?.host, !host.isEmpty else { return nil }
         return URL(string: "http://\(host)")
     }
+    /// A WebSocket handshake built from a QR code cannot carry a header, so the token goes in the
+    /// query string there. Everything else uses `authorized(_:)` below.
     func withToken(_ url: URL) -> URL {
         guard let t = settings?.token, !t.isEmpty, var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
         c.queryItems = (c.queryItems ?? []) + [URLQueryItem(name: "token", value: t)]
         return c.url ?? url
     }
 
+    /// A request carrying the token as a bearer header, which — unlike a query string — does not end
+    /// up in server logs or proxy history.
+    func authorized(_ url: URL, method: String = "GET") -> URLRequest {
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        if let t = settings?.token, !t.isEmpty { req.setValue("Bearer \(t)", forHTTPHeaderField: "authorization") }
+        return req
+    }
+
     /// Sends one turn. Returns the server's turn id.
     func sendTurn(png: Data, text: String, newStrokes: Int, boardId: UUID, boardTitle: String) async throws -> String {
         guard let base = baseURL else { throw NSError(domain: "sketchpad", code: 1, userInfo: [NSLocalizedDescriptionKey: "No host configured"]) }
-        var req = URLRequest(url: withToken(base.appendingPathComponent("turn")))
-        req.httpMethod = "POST"
+        var req = authorized(base.appendingPathComponent("turn"), method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         let body: [String: Any] = ["text": text, "png": png.isEmpty ? NSNull() : "data:image/png;base64," + png.base64EncodedString(), "strokes": newStrokes, "boardId": boardId.uuidString, "boardTitle": boardTitle]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -69,8 +79,7 @@ final class ServerConnection: NSObject, ObservableObject {
     /// Answer something the Mac asked over the socket.
     func postAnswer(id: String, _ fields: [String: Any]) {
         guard let base = baseURL else { return }
-        var req = URLRequest(url: withToken(base.appendingPathComponent("answer")))
-        req.httpMethod = "POST"
+        var req = authorized(base.appendingPathComponent("answer"), method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: fields.merging(["id": id]) { a, _ in a })
         session.dataTask(with: req).resume()
@@ -78,7 +87,7 @@ final class ServerConnection: NSObject, ObservableObject {
 
     /// Download an agent file to a local URL.
     func download(_ url: URL, to dest: URL) async throws {
-        let (data, resp) = try await session.data(from: url)
+        let (data, resp) = try await session.data(for: authorized(url))
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw NSError(domain: "sketchpad", code: 3, userInfo: [NSLocalizedDescriptionKey: "download failed"]) }
         try data.write(to: dest, options: .atomic)
     }
@@ -175,7 +184,9 @@ final class ServerConnection: NSObject, ObservableObject {
             if url.hasPrefix("data:image/svg+xml;base64,"), let d = Data(base64Encoded: String(url.dropFirst("data:image/svg+xml;base64,".count))) {
                 files.append(ReplyFile(kind: "sketch", name: name, svg: String(data: d, encoding: .utf8), remoteURL: nil, layer: false))
             } else if url.hasPrefix("/"), let base = baseURL {
-                files.append(ReplyFile(kind: kind, name: name, svg: nil, remoteURL: withToken(base.appendingPathComponent(url)), layer: f["layer"] as? Bool ?? false))
+                // Stored plain: this is persisted with the turn, and a saved token would outlive
+                // the pairing it came from. download(_:to:) adds the header when it fetches.
+                files.append(ReplyFile(kind: kind, name: name, svg: nil, remoteURL: base.appendingPathComponent(url), layer: f["layer"] as? Bool ?? false))
             }
         }
         return Reply(id: m["id"] as? String ?? UUID().uuidString, ts: (m["ts"] as? Double ?? 0) / 1000,
@@ -185,10 +196,9 @@ final class ServerConnection: NSObject, ObservableObject {
     /// Replies the server broadcast while this iPad was not connected.
     func missedReplies(since: Double) async -> [Reply] {
         guard let base = baseURL else { return [] }
-        guard var c = URLComponents(url: withToken(base.appendingPathComponent("replies")), resolvingAgainstBaseURL: false) else { return [] }
-        let existing = c.queryItems ?? []
-        c.queryItems = existing + [URLQueryItem(name: "since", value: String(Int(since * 1000)))]
-        guard let url = c.url, let (data, _) = try? await session.data(from: url),
+        guard var c = URLComponents(url: base.appendingPathComponent("replies"), resolvingAgainstBaseURL: false) else { return [] }
+        c.queryItems = [URLQueryItem(name: "since", value: String(Int(since * 1000)))]
+        guard let url = c.url, let (data, _) = try? await session.data(for: authorized(url)),
               let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
         return rows.map(parseReply)
     }

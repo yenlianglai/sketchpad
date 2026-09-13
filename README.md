@@ -120,7 +120,7 @@ Three environment variables worth knowing:
 | Variable | Default | |
 | --- | --- | --- |
 | `SKETCHPAD_PORT` | `8791` | Your MCP config carries this port, so the server never moves it on its own. |
-| `SKETCHPAD_TOKEN` | none | Shared secret. The pairing QR carries it to the iPad. |
+| `SKETCHPAD_TOKEN` | generated | A token is made on first run and kept. The pairing QR carries it. |
 | `SKETCHPAD_URL` | `http://127.0.0.1:8791` | Where the stdio wrapper looks for the running server. |
 
 ---
@@ -132,6 +132,8 @@ Three environment variables worth knowing:
   as a mode you switch on and off.
 - **Your drawings live on the iPad.** The Mac keeps nothing — it passes a page to the agent, then
   forgets it. That is why looking back at old pages needs the iPad awake.
+- **Locked by default.** A token is generated on first run, so only a device that scanned your QR
+  can connect. The agent's own endpoint is not reachable from the network at all.
 - **Same network only.** No relay, no cloud, no account.
 - **Sketchpad places diagrams, it does not render them.** Give it a PNG or SVG and it becomes a
   layer; an agent that wants to send a Mermaid chart needs its own way to turn one into an image.

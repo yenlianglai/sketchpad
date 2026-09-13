@@ -20,12 +20,12 @@ export function createHub({ log = () => {} } = {}) {
     clientCount: () => sockets.size,
     onGreeting(fn) { greeting = fn },
 
-    /// Accept `/ws` upgrades on an http server. `authorize` gets the parsed URL.
+    /// Accept `/ws` upgrades on an http server. `authorize` gets the request and the parsed URL.
     attachTo(server, { path = '/ws', authorize = () => true } = {}) {
       const wss = new WebSocketServer({ noServer: true })
       server.on('upgrade', (req, socket, head) => {
         const url = new URL(req.url, 'http://x')
-        if (url.pathname !== path || !authorize(url)) { socket.destroy(); return }
+        if (url.pathname !== path || !authorize(req, url)) { socket.destroy(); return }
         wss.handleUpgrade(req, socket, head, ws => {
           sockets.add(ws)
           log(`iPad connected (${sockets.size} now)`)

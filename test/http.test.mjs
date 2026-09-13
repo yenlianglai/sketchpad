@@ -16,6 +16,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = 8894
 const BASE = `http://127.0.0.1:${PORT}`
 const SKETCH = readFileSync(join(ROOT, 'test/fixtures/page.png')).toString('base64')
+const TOKEN = 'test-token-not-a-secret'
+const AUTH = { authorization: `Bearer ${TOKEN}` }
 
 describe('over http', () => {
   let server, client, ipad
@@ -24,17 +26,19 @@ describe('over http', () => {
   before(async () => {
     server = spawn('node', [join(ROOT, 'server/index.mjs')], {
       cwd: mkdtempSync(join(tmpdir(), 'sketchpad-http-')),
-      env: { ...process.env, SKETCHPAD_PORT: String(PORT), SKETCHPAD_QUIET: '1', SKETCHPAD_NO_BONJOUR: '1' },
+      env: { ...process.env, SKETCHPAD_PORT: String(PORT), SKETCHPAD_QUIET: '1', SKETCHPAD_NO_BONJOUR: '1', SKETCHPAD_TOKEN: TOKEN },
       stdio: ['ignore', 'ignore', 'inherit']
     })
-    await waitFor(async () => (await fetch(`${BASE}/health`)).ok)
+    await waitFor(async () => (await fetch(`${BASE}/health`, { headers: AUTH })).ok)
 
-    ipad = new WebSocket(`ws://127.0.0.1:${PORT}/ws`)
+    // The iPad has no way to set headers on a WebSocket handshake it builds from a QR code, so the
+    // token rides in the query string there.
+    ipad = new WebSocket(`ws://127.0.0.1:${PORT}/ws?token=${TOKEN}`)
     ipad.on('message', d => fromIPad.push(JSON.parse(d.toString())))
     await new Promise(r => ipad.on('open', r))
 
     client = new Client({ name: 'test-agent', version: '0' })
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`)))
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { requestInit: { headers: AUTH } }))
   })
 
   after(async () => {
@@ -48,7 +52,7 @@ describe('over http', () => {
   const seen = (type, where = () => true) => fromIPad.find(m => m.type === type && where(m))
   /// The iPad answering something the server asked it over the socket.
   const answer = body => fetch(`${BASE}/answer`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+    method: 'POST', headers: { 'content-type': 'application/json', ...AUTH }, body: JSON.stringify(body)
   })
 
   test('the iPad is greeted with the current state', () => {
@@ -60,7 +64,7 @@ describe('over http', () => {
 
     const posted = await fetch(`${BASE}/turn`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...AUTH },
       body: JSON.stringify({ text: 'make this a login form', png: `data:image/png;base64,${SKETCH}`, strokes: 4, boardId: 'B1', boardTitle: 'Flow' })
     }).then(r => r.json())
     assert.match(posted.turnId, /^[0-9a-f]{8}$/)
@@ -76,7 +80,7 @@ describe('over http', () => {
   })
 
   test('the agent is reported as listening once it has waited', async () => {
-    assert.equal((await fetch(`${BASE}/health`).then(r => r.json())).agent_listening, true)
+    assert.equal((await fetch(`${BASE}/health`, { headers: AUTH }).then(r => r.json())).agent_listening, true)
     await waitFor(() => fromIPad.some(m => m.type === 'agents' && m.listening))
   })
 
@@ -85,7 +89,7 @@ describe('over http', () => {
     await waitFor(() => !!seen('reply'))
     assert.equal(seen('reply').text, 'Account, password, a button.')
 
-    const replies = await fetch(`${BASE}/replies?since=0`).then(r => r.json())
+    const replies = await fetch(`${BASE}/replies?since=0`, { headers: AUTH }).then(r => r.json())
     assert.equal(replies.at(-1).text, 'Account, password, a button.')
   })
 
@@ -111,9 +115,30 @@ describe('over http', () => {
   })
 
   test('an unknown path still answers rather than hanging', async () => {
-    const res = await fetch(`${BASE}/nothing-here`)
+    const res = await fetch(`${BASE}/nothing-here`, { headers: AUTH })
     assert.equal(res.status, 200)
     assert.match(await res.text(), /Sketchpad is running/)
+  })
+
+  describe('a stranger on the same network', () => {
+    test('is refused without the token', async () => {
+      for (const path of ['/health', '/replies?since=0', '/turn', '/files/anything.png']) {
+        assert.equal((await fetch(BASE + path)).status, 401, path)
+      }
+    })
+
+    test('is refused with the wrong token', async () => {
+      assert.equal((await fetch(`${BASE}/health?token=nearly-right`)).status, 401)
+    })
+
+    test('cannot open the iPad socket, so cannot mirror what is drawn', async () => {
+      const rogue = new WebSocket(`ws://127.0.0.1:${PORT}/ws`)
+      const outcome = await new Promise(r => {
+        rogue.on('open', () => r('open'))
+        rogue.on('error', () => r('refused'))
+      })
+      assert.equal(outcome, 'refused')
+    })
   })
 })
 

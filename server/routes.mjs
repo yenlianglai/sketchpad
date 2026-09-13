@@ -62,7 +62,7 @@ export function createRoutes({ state, hub, authorize, pairingURL, log = () => {}
 
   return async function handle(req, res) {
     const url = new URL(req.url, 'http://x')
-    if (!authorize(url)) return send(res, 401, 'bad token')
+    if (!authorize(req, url)) return send(res, 401, 'not allowed')
     try {
       if (url.pathname === '/mcp') return handleMCP(req, res)
       if (req.method === 'POST' && url.pathname === '/turn') return receiveTurn(req, res)

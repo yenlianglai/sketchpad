@@ -10,7 +10,7 @@
 // Nothing but MCP protocol may go to stdout — logs go to stderr.
 
 import { spawn } from 'node:child_process'
-import { openSync } from 'node:fs'
+import { openSync, mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -18,17 +18,23 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { loadOrCreateToken } from './auth.mjs'
+import { spoolDir, serverLogPath } from './paths.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
 const BASE = (process.env.SKETCHPAD_URL || 'http://127.0.0.1:8791').replace(/\/+$/, '')
 const AUTOSTART = process.env.SKETCHPAD_NO_AUTOSTART !== '1'
+// The server on this machine keeps its token in a file only this user can read, so the wrapper can
+// simply pick it up rather than having it configured in every MCP client.
+const { token: TOKEN } = loadOrCreateToken()
+const AUTH = TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}
 const log = (...a) => console.error('[sketchpad-mcp]', ...a)
 
 const health = async (ms = 1200) => {
   try {
     const c = AbortSignal.timeout(ms)
-    const r = await fetch(`${BASE}/health`, { signal: c })
+    const r = await fetch(`${BASE}/health`, { signal: c, headers: AUTH })
     return r.ok ? await r.json() : null
   } catch { return null }
 }
@@ -43,7 +49,8 @@ async function ensureServer() {
   }
 
   log('no sketchpad running — starting one')
-  const out = openSync(join(ROOT, '.sketchpad-server.log'), 'a')
+  mkdirSync(spoolDir(), { recursive: true })
+  const out = openSync(serverLogPath(), 'a')
   const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
     cwd: ROOT, detached: true, stdio: ['ignore', out, out]
   })
@@ -55,7 +62,7 @@ async function ensureServer() {
     await new Promise(r => setTimeout(r, 400))
     if (await health(800)) { log('sketchpad is up'); return true }
   }
-  log(`sketchpad did not come up within 16s — see ${join(ROOT, '.sketchpad-server.log')}`)
+  log(`sketchpad did not come up within 16s — see ${serverLogPath()}`)
   return false
 }
 
@@ -63,7 +70,7 @@ let upstream = null
 async function connectUpstream() {
   if (upstream) return upstream
   const client = new Client({ name: 'sketchpad-stdio-proxy', version: '0.1.0' })
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`)))
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { requestInit: { headers: AUTH } }))
   upstream = client
   return client
 }

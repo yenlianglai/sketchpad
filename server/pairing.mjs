@@ -19,7 +19,7 @@ export function pairingURL({ host, port, token }) {
 }
 
 /// Printed to stderr, never stdout: in stdio mode stdout is the MCP transport.
-export function printPairing({ host, port, token }) {
+export function printPairing({ host, port, token, tokenSource }) {
   const { url } = pairingURL({ host, port, token })
   const out = s => process.stderr.write(s + '\n')
   out('')
@@ -29,6 +29,11 @@ export function printPairing({ host, port, token }) {
   out(`  ${url}`)
   out('')
   out('  Agent   npm run register -- --write')
+  out('')
+  // The QR carries the token, so the only thing worth saying is whether there is one.
+  out(token
+    ? '  Locked  only devices that scan this code can connect.'
+    : '  OPEN    no token: anyone on this network can read your canvas and this machine\'s files.')
   out('')
 }
 

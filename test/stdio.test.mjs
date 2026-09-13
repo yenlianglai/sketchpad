@@ -11,6 +11,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = 8895
+const TOKEN = 'stdio-test-token'
 
 describe('over stdio', () => {
   let client, transport
@@ -24,7 +25,8 @@ describe('over stdio', () => {
         SKETCHPAD_URL: `http://127.0.0.1:${PORT}`,
         SKETCHPAD_PORT: String(PORT),
         SKETCHPAD_QUIET: '1',
-        SKETCHPAD_NO_BONJOUR: '1'
+        SKETCHPAD_NO_BONJOUR: '1',
+        SKETCHPAD_TOKEN: TOKEN
       },
       stderr: 'ignore'
     })
@@ -52,8 +54,15 @@ describe('over stdio', () => {
     const status = JSON.parse((await client.callTool({ name: 'sketchpad_status', arguments: {} })).content[0].text)
     assert.equal(typeof status.pending_turns, 'number')
 
-    const direct = await fetch(`http://127.0.0.1:${PORT}/health`).then(r => r.json())
+    const direct = await fetch(`http://127.0.0.1:${PORT}/health`, {
+      headers: { authorization: `Bearer ${TOKEN}` }
+    }).then(r => r.json())
     assert.equal(direct.ok, true)
+  })
+
+  test('the wrapper finds the token itself, so no client has to be told it', async () => {
+    // It reached the shared server above without the token ever appearing in this client's config.
+    assert.equal((await fetch(`http://127.0.0.1:${PORT}/health`)).status, 401)
   })
 
   test('waiting with nothing queued returns, rather than hanging the agent', async () => {

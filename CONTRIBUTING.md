@@ -5,6 +5,8 @@
 ```
 server/
   index.mjs         wiring: config, the http server, and starting the rest
+  auth.mjs          the token, and who is allowed to reach what
+  paths.mjs         where things go on each platform
   hub.mjs           the iPads currently connected — broadcast, clientCount
   state.mjs         what is in flight: the queue, questions for the iPad, the spool
   tools.mjs         the seven MCP tools, over state
@@ -43,7 +45,9 @@ Useful environment variables while developing:
 | `SKETCHPAD_PORT` | Move the port. The iPad follows over Bonjour; a registered MCP URL does not. |
 | `SKETCHPAD_QUIET=1` | No banner, no request log. Used by the tests. |
 | `SKETCHPAD_NO_BONJOUR=1` | Do not advertise. Used by the tests and by CI. |
-| `SKETCHPAD_TOKEN` | Require a token. The pairing QR carries it. |
+| `SKETCHPAD_TOKEN` | Use this token instead of the generated one. |
+| `SKETCHPAD_NO_TOKEN=1` | No token at all. Only sane on a network you control entirely. |
+| `SKETCHPAD_MCP_REMOTE=1` | Let `/mcp` be reached from the network, for a server on another box. |
 | `SKETCHPAD_SPOOL_DIR` | Move the in-flight cache. Used by the tests. |
 
 ## Tests
