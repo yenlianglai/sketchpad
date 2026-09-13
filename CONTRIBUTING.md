@@ -129,7 +129,11 @@ wiring it up fails.
 ## Releasing
 
 Tag `vX.Y.Z`. CI runs the tests, packs `dist/sketchpad.mcpb`, and attaches it to the release.
-Bump the version in `package.json`, `.claude-plugin/plugin.json` and `manifest.json` together.
+
+`package.json` holds the version; the server reads it from there. The files that have to carry their
+own copy — `manifest.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` and the
+app's `MARKETING_VERSION` — are held to it by a test, so bumping one and forgetting the rest fails
+rather than shipping a number that disagrees with itself.
 
 ## Brand
 

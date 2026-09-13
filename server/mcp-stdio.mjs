@@ -21,6 +21,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { loadOrCreateToken } from './auth.mjs'
 import { spoolDir, serverLogPath } from './paths.mjs'
 import { localFetch, localURL } from './local-fetch.mjs'
+import { VERSION } from './version.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
@@ -74,7 +75,7 @@ async function ensureServer() {
 let upstream = null
 async function connectUpstream() {
   if (upstream) return upstream
-  const client = new Client({ name: 'sketchpad-stdio-proxy', version: '0.1.0' })
+  const client = new Client({ name: 'sketchpad-stdio-proxy', version: VERSION })
   await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), {
     requestInit: { headers: AUTH },
     fetch: (input, init) => fetchLocal(input, init)
@@ -97,7 +98,7 @@ async function withUpstream(fn) {
 
 const INSTRUCTIONS = 'A person is drawing on an iPad with a pencil. Call sketchpad_wait_for_turn to receive each turn: a PNG of their page (grey = strokes you already saw, dark = new since last turn) plus an optional handwritten note. Look at the image first. Answer with sketchpad_show: a short text; an svg in that image\'s pixel coordinates when a small drawn addition helps (it becomes editable strokes on their canvas); or image_path when you have rendered a diagram or generated an image (it becomes a layer they can move and draw over). Use sketchpad_list_turns / sketchpad_get_turn to look back at earlier versions. Name the page with sketchpad_set_title once you know what it is. Then wait for the next turn.'
 
-const server = new Server({ name: 'sketchpad', version: '0.3.0' }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
+const server = new Server({ name: 'sketchpad', version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   try {

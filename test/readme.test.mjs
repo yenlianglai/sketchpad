@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TOOLS } from '../server/tools.mjs'
+import { TOOLS, VERSION } from '../server/tools.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const README = readFileSync(join(ROOT, 'README.md'), 'utf8')
@@ -102,11 +102,24 @@ describe('the Claude Desktop bundle manifest', () => {
     assert.deepEqual(manifest.tools.map(t => t.name), TOOLS.map(t => t.name))
   })
 
-  test('and carries the same version as the package', () => {
-    const manifest = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8'))
-    const plugin = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'plugin.json'), 'utf8'))
-    assert.equal(manifest.version, pkg.version, 'manifest.json and package.json disagree')
-    assert.equal(plugin.version, pkg.version, 'plugin.json and package.json disagree')
+  test('and every file that has to carry its own version agrees with the package', () => {
+    const json = name => JSON.parse(readFileSync(join(ROOT, name), 'utf8'))
+    assert.equal(json('manifest.json').version, pkg.version, 'manifest.json disagrees')
+    assert.equal(json('.claude-plugin/plugin.json').version, pkg.version, 'plugin.json disagrees')
+    for (const p of json('.claude-plugin/marketplace.json').plugins) {
+      assert.equal(p.version, pkg.version, 'marketplace.json disagrees')
+    }
+    const projectYml = readFileSync(join(ROOT, 'ios', 'project.yml'), 'utf8')
+    assert.match(projectYml, new RegExp(`MARKETING_VERSION: "${pkg.version}"`), 'the app disagrees')
+  })
+
+  test('and the version an agent is told is the one that was released', () => {
+    assert.equal(VERSION, pkg.version)
+    // Nothing should be writing it out by hand any more.
+    for (const file of ['tools.mjs', 'mcp-stdio.mjs']) {
+      const source = readFileSync(join(ROOT, 'server', file), 'utf8')
+      assert.ok(!/version: '\d+\.\d+\.\d+'/.test(source), `${file} hardcodes a version`)
+    }
   })
 })
 

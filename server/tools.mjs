@@ -8,8 +8,9 @@ import { randomUUID } from 'node:crypto'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { pngSize } from './state.mjs'
+import { VERSION } from './version.mjs'
 
-export const VERSION = '0.3.0'
+export { VERSION } from './version.mjs'
 
 export const INSTRUCTIONS = [
   'A person is drawing on an iPad with a pencil.',
