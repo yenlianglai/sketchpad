@@ -125,6 +125,7 @@ Three environment variables worth knowing:
 | --- | --- | --- |
 | `SKETCHPAD_PORT` | `8791` | Your MCP config carries this port, so the server never moves it on its own. |
 | `SKETCHPAD_TOKEN` | generated | A token is made on first run and kept. The pairing QR carries it. |
+| `SKETCHPAD_NO_TLS` | off | Serve plain http. Only sane behind something that already encrypts. |
 | `SKETCHPAD_URL` | `http://127.0.0.1:8791` | Where the stdio wrapper looks for the running server. |
 
 ---
@@ -136,9 +137,12 @@ Three environment variables worth knowing:
   as a mode you switch on and off.
 - **Your drawings live on the iPad.** The Mac keeps nothing — it passes a page to the agent, then
   forgets it. That is why looking back at old pages needs the iPad awake.
-- **Locked by default.** Only iPads you have paired can connect, each with its own key, and the
-  agent's endpoint is not reachable from the network at all. The QR carries a code that pairs one
-  device once and expires in ten minutes, so a photo of your screen is worth nothing later.
+- **Locked and encrypted by default.** Only iPads you have paired can connect, each with its own
+  key, and the agent's endpoint is not reachable from the network at all. The QR carries a code that
+  pairs one device once and expires in ten minutes, so a photo of your screen is worth nothing later.
+- **Nobody can listen in.** Traffic is TLS. There is no certificate authority for a laptop on a home
+  network, so the Mac signs its own and the QR carries its fingerprint — the iPad pins that and
+  refuses anything else, which is what stops someone on the same wifi sitting in the middle.
 - **Same network only.** No relay, no cloud, no account.
 - **Sketchpad places diagrams, it does not render them.** Give it a PNG or SVG and it becomes a
   layer; an agent that wants to send a Mermaid chart needs its own way to turn one into an image.

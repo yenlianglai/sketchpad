@@ -4,47 +4,67 @@
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import WebSocket from 'ws'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { localFetch } from '../server/local-fetch.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = 8894
-const BASE = `http://127.0.0.1:${PORT}`
+// The server serves TLS by default now, so the tests take the same path a real client does:
+// verified against the certificate it wrote, not against the public CA list.
+const BASE = `https://127.0.0.1:${PORT}`
 const SKETCH = readFileSync(join(ROOT, 'test/fixtures/page.png')).toString('base64')
 const TOKEN = 'test-token-not-a-secret'
 const AUTH = { authorization: `Bearer ${TOKEN}` }
 
 describe('over http', () => {
-  let server, client, ipad
+  let server, client, ipad, configDir, fetch
+
   const fromIPad = []
 
   before(async () => {
+    // Its own config directory, so the suite never touches the token, certificate or paired
+    // devices belonging to whoever is running it.
+    configDir = mkdtempSync(join(tmpdir(), 'sketchpad-config-'))
     server = spawn('node', [join(ROOT, 'server/index.mjs')], {
       cwd: mkdtempSync(join(tmpdir(), 'sketchpad-http-')),
-      env: { ...process.env, SKETCHPAD_PORT: String(PORT), SKETCHPAD_QUIET: '1', SKETCHPAD_NO_BONJOUR: '1', SKETCHPAD_TOKEN: TOKEN },
+      env: {
+        ...process.env,
+        SKETCHPAD_PORT: String(PORT), SKETCHPAD_QUIET: '1', SKETCHPAD_NO_BONJOUR: '1',
+        SKETCHPAD_TOKEN: TOKEN, SKETCHPAD_CONFIG_DIR: configDir
+      },
       stdio: ['ignore', 'ignore', 'inherit']
     })
+
+    // The certificate only exists once the server has written it.
+    await waitFor(() => existsSync(join(configDir, 'cert.pem')), 'the server never wrote a certificate')
+    const ca = readFileSync(join(configDir, 'cert.pem'), 'utf8')
+    fetch = localFetch({ ca })
     await waitFor(async () => (await fetch(`${BASE}/health`, { headers: AUTH })).ok)
 
     // The iPad has no way to set headers on a WebSocket handshake it builds from a QR code, so the
     // token rides in the query string there.
-    ipad = new WebSocket(`ws://127.0.0.1:${PORT}/ws?token=${TOKEN}`)
+    ipad = new WebSocket(`wss://127.0.0.1:${PORT}/ws?token=${TOKEN}`, { ca, checkServerIdentity: () => undefined })
     ipad.on('message', d => fromIPad.push(JSON.parse(d.toString())))
     await new Promise(r => ipad.on('open', r))
 
     client = new Client({ name: 'test-agent', version: '0' })
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { requestInit: { headers: AUTH } }))
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), {
+      requestInit: { headers: AUTH },
+      fetch: (input, init) => fetch(input, init)
+    }))
   })
 
   after(async () => {
     await client?.close()
     ipad?.close()
     server?.kill()
+    rmSync(configDir, { recursive: true, force: true })
   })
 
   const call = (name, args = {}) => client.callTool({ name, arguments: args })
@@ -132,7 +152,7 @@ describe('over http', () => {
     })
 
     test('cannot open the iPad socket, so cannot mirror what is drawn', async () => {
-      const rogue = new WebSocket(`ws://127.0.0.1:${PORT}/ws`)
+      const rogue = new WebSocket(`wss://127.0.0.1:${PORT}/ws`, { rejectUnauthorized: false })
       const outcome = await new Promise(r => {
         rogue.on('open', () => r('open'))
         rogue.on('error', () => r('refused'))

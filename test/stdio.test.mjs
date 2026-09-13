@@ -4,34 +4,46 @@
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { localFetch } from '../server/local-fetch.mjs'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = 8895
 const TOKEN = 'stdio-test-token'
+const BASE = `https://127.0.0.1:${PORT}`
 
 describe('over stdio', () => {
-  let client, transport
+  let client, transport, configDir, fetch
 
   before(async () => {
+    // Its own config directory: the wrapper reads the token and certificate from wherever the
+    // server put them, and this suite must not read or write the real ones.
+    configDir = mkdtempSync(join(tmpdir(), 'sketchpad-stdio-config-'))
     transport = new StdioClientTransport({
       command: 'node',
       args: [join(ROOT, 'server/mcp-stdio.mjs')],
       env: {
         ...process.env,
-        SKETCHPAD_URL: `http://127.0.0.1:${PORT}`,
+        SKETCHPAD_URL: BASE,
         SKETCHPAD_PORT: String(PORT),
         SKETCHPAD_QUIET: '1',
         SKETCHPAD_NO_BONJOUR: '1',
-        SKETCHPAD_TOKEN: TOKEN
+        SKETCHPAD_TOKEN: TOKEN,
+        SKETCHPAD_CONFIG_DIR: configDir
       },
       stderr: 'ignore'
     })
     client = new Client({ name: 'test-any-agent', version: '0' })
     await client.connect(transport)
+
+    // The wrapper started the server, which wrote the certificate this suite now trusts.
+    for (let i = 0; i < 40 && !existsSync(join(configDir, 'cert.pem')); i++) await new Promise(r => setTimeout(r, 100))
+    fetch = localFetch({ ca: readFileSync(join(configDir, 'cert.pem'), 'utf8') })
   })
 
   after(async () => {
@@ -40,8 +52,14 @@ describe('over stdio', () => {
     // That means this test has to clean it up itself.
     try {
       const pids = execFileSync('lsof', ['-t', `-i:${PORT}`], { encoding: 'utf8' }).trim().split('\n')
-      for (const pid of pids) if (pid) process.kill(Number(pid))
+      // This process holds a connection to that port too, and lsof does not distinguish: killing
+      // everything it lists would kill the test run itself.
+      for (const pid of pids) {
+        const n = Number(pid)
+        if (n && n !== process.pid) process.kill(n)
+      }
     } catch { /* already gone */ }
+    rmSync(configDir, { recursive: true, force: true })
   })
 
   test('it starts the shared server and forwards the tools', async () => {
@@ -54,7 +72,7 @@ describe('over stdio', () => {
     const status = JSON.parse((await client.callTool({ name: 'sketchpad_status', arguments: {} })).content[0].text)
     assert.equal(typeof status.pending_turns, 'number')
 
-    const direct = await fetch(`http://127.0.0.1:${PORT}/health`, {
+    const direct = await fetch(`${BASE}/health`, {
       headers: { authorization: `Bearer ${TOKEN}` }
     }).then(r => r.json())
     assert.equal(direct.ok, true)
@@ -62,7 +80,7 @@ describe('over stdio', () => {
 
   test('the wrapper finds the token itself, so no client has to be told it', async () => {
     // It reached the shared server above without the token ever appearing in this client's config.
-    assert.equal((await fetch(`http://127.0.0.1:${PORT}/health`)).status, 401)
+    assert.equal((await fetch(`${BASE}/health`)).status, 401)
   })
 
   test('waiting with nothing queued returns, rather than hanging the agent', async () => {

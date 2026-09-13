@@ -18,6 +18,6 @@ export function cacheHome() {
   return process.env.XDG_CACHE_HOME || join(homedir(), '.cache')
 }
 
-export const configDir = () => join(configHome(), 'sketchpad')
+export const configDir = () => process.env.SKETCHPAD_CONFIG_DIR || join(configHome(), 'sketchpad')
 export const spoolDir = () => process.env.SKETCHPAD_SPOOL_DIR || join(cacheHome(), 'sketchpad')
 export const serverLogPath = () => join(spoolDir(), 'server.log')

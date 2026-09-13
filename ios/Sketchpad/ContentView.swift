@@ -94,9 +94,10 @@ struct ContentView: View {
         .onChange(of: showSettings) { _, shown in if !shown && !layerMode { canvasController.setToolPickerVisible(true) } }
         .sheet(isPresented: $showSettings) { SettingsView(onScan: { showSettings = false; showScanner = true }).environmentObject(settings).environmentObject(conn) }
         .sheet(isPresented: $showScanner) {
-            QRScannerSheet { host, credential in
+            QRScannerSheet { host, credential, fingerprint in
                 switch credential {
                 case .token(let token):
+                    settings.fingerprint = fingerprint
                     settings.host = host
                     settings.token = token
                     conn.reconnectNow()
@@ -104,7 +105,10 @@ struct ContentView: View {
                 case .code(let code):
                     Task {
                         do {
-                            let token = try await conn.redeem(code: code, at: host)
+                            // Only saved once the exchange has gone through, so a failed pairing
+                            // leaves the working one alone.
+                            let token = try await conn.redeem(code: code, at: host, fingerprint: fingerprint)
+                            settings.fingerprint = fingerprint
                             settings.host = host
                             settings.token = token
                             conn.reconnectNow()
@@ -114,6 +118,7 @@ struct ContentView: View {
                         }
                     }
                 case .none:
+                    settings.fingerprint = fingerprint
                     settings.host = host
                     conn.reconnectNow()
                     showFlash("Connecting to \(host)")

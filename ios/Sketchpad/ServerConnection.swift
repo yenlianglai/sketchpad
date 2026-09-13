@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 import UIKit
 
 /// A file the agent handed back with a reply.
@@ -29,7 +30,11 @@ final class ServerConnection: NSObject, ObservableObject {
     private var reconnectDelay: TimeInterval = 1
     private var reconnectTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
-    private lazy var session = URLSession(configuration: .default)
+    /// Every request goes through `pinned`, which is this object: the Mac signs its own
+    /// certificate, so the only thing that makes it trustworthy is that its fingerprint matches the
+    /// one in the QR we scanned off the screen.
+    private lazy var session = URLSession(configuration: .default, delegate: pinned, delegateQueue: nil)
+    private lazy var pinned = PinnedCertificate { [weak self] in self?.settings?.fingerprint ?? "" }
     private var browser: NetServiceBrowser?
     private var services: [NetService] = []
 
@@ -42,9 +47,12 @@ final class ServerConnection: NSObject, ObservableObject {
 
     // MARK: HTTP
 
+    /// https once we have pinned a certificate; plain http for a server running without TLS.
+    var scheme: String { (settings?.fingerprint.isEmpty ?? true) ? "http" : "https" }
+
     var baseURL: URL? {
         guard let host = settings?.host, !host.isEmpty else { return nil }
-        return URL(string: "http://\(host)")
+        return URL(string: "\(scheme)://\(host)")
     }
     /// A WebSocket handshake built from a QR code cannot carry a header, so the token goes in the
     /// query string there. Everything else uses `authorized(_:)` below.
@@ -87,8 +95,12 @@ final class ServerConnection: NSObject, ObservableObject {
 
     /// Exchange a pairing code for this iPad's own key. The code is good once, so this is the only
     /// chance to keep what comes back.
-    func redeem(code: String, at host: String) async throws -> String {
-        guard let base = URL(string: "http://\(host)") else {
+    func redeem(code: String, at host: String, fingerprint: String) async throws -> String {
+        // Pin first: the exchange itself has to be protected, or the key could be handed to someone
+        // standing in the middle of it.
+        pinned.override = fingerprint
+        defer { pinned.override = nil }
+        guard let base = URL(string: "\(fingerprint.isEmpty ? "http" : "https")://\(host)") else {
             throw NSError(domain: "sketchpad", code: 4, userInfo: [NSLocalizedDescriptionKey: "That address is not valid"])
         }
         var req = URLRequest(url: base.appendingPathComponent("pair"))
@@ -124,7 +136,7 @@ final class ServerConnection: NSObject, ObservableObject {
 
     private func connect() {
         guard let base = baseURL, var c = URLComponents(url: base.appendingPathComponent("ws"), resolvingAgainstBaseURL: false) else { status = .disconnected; return }
-        c.scheme = "ws"
+        c.scheme = scheme == "https" ? "wss" : "ws"
         guard let url = c.url else { return }
         status = .connecting
         let task = session.webSocketTask(with: withToken(url))
@@ -250,6 +262,43 @@ extension ServerConnection: NetServiceBrowserDelegate, NetServiceDelegate {
             let entry = "\(host.trimmingCharacters(in: CharacterSet(charactersIn: "."))):\(sender.port)"
             if !discovered.contains(entry) { discovered.append(entry) }
             if let s = settings, s.host.isEmpty { s.host = entry }
+        }
+    }
+}
+
+
+/// Trust on first use, the way a machine on your own desk actually works.
+///
+/// There is no certificate authority that can vouch for a laptop on a home network, so the Mac signs
+/// its own certificate and the pairing QR carries its fingerprint. Scanning that code off your own
+/// screen is the trusted channel; from then on this refuses any certificate that does not match,
+/// which is what stops someone on the same wifi from sitting in the middle.
+final class PinnedCertificate: NSObject, URLSessionDelegate {
+    /// Used during pairing, before the fingerprint has been saved anywhere.
+    var override: String?
+    private let expected: () -> String
+
+    init(expected: @escaping () -> String) { self.expected = expected }
+
+    func urlSession(_ session: URLSession,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else {
+            return completionHandler(.performDefaultHandling, nil)
+        }
+        let want = (override ?? expected()).lowercased()
+        guard !want.isEmpty,
+              let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate],
+              let leaf = chain.first else {
+            return completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+        let got = SHA256.hash(data: SecCertificateCopyData(leaf) as Data)
+            .map { String(format: "%02x", $0) }.joined()
+        if got == want {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
         }
     }
 }

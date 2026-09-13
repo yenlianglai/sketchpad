@@ -7,6 +7,8 @@ server/
   index.mjs         wiring: config, the http server, and starting the rest
   auth.mjs          the token, and who is allowed to reach what
   devices.mjs       paired iPads: the pairing code, their keys, revoking one
+  tls.mjs           the self-signed certificate and its fingerprint
+  local-fetch.mjs   talking to our own server over its own certificate
   paths.mjs         where things go on each platform
   hub.mjs           the iPads currently connected — broadcast, clientCount
   state.mjs         what is in flight: the queue, questions for the iPad, the spool
@@ -51,6 +53,8 @@ Useful environment variables while developing:
 | `SKETCHPAD_QUIET=1` | No banner, no request log. Used by the tests. |
 | `SKETCHPAD_NO_BONJOUR=1` | Do not advertise. Used by the tests and by CI. |
 | `SKETCHPAD_TOKEN` | Use this token instead of the generated one. |
+| `SKETCHPAD_CONFIG_DIR` | Move the token, certificate and paired devices. Used by the tests. |
+| `SKETCHPAD_NO_TLS=1` | Serve plain http. |
 | `SKETCHPAD_NO_TOKEN=1` | No token at all. Only sane on a network you control entirely. |
 | `SKETCHPAD_MCP_REMOTE=1` | Let `/mcp` be reached from the network, for a server on another box. |
 | `SKETCHPAD_SPOOL_DIR` | Move the in-flight cache. Used by the tests. |
@@ -70,6 +74,7 @@ The suites are deliberately different shapes:
 - `test/stdio.test.mjs` — the wrapper, spawned the way a desktop client spawns it.
 - `test/auth.test.mjs` — who gets in. Every case here was once allowed.
 - `test/devices.test.mjs` — pairing: a code good once, briefly, and revoking one device.
+- `test/tls.test.mjs` — the certificate, and that the fingerprint in the QR matches what is served.
 - `test/platform.test.mjs` — the paths that differ per platform, checked against a stand-in home,
   since the suite only ever runs on one platform at a time.
 - `test/autostart.test.mjs` — the login-item plan for all three platforms, without installing one.

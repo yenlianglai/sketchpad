@@ -15,14 +15,26 @@ export function lanIP() {
 
 /// What the QR encodes. A `code` is exchanged for a key of the device's own; a `token` is that key
 /// directly, which is what a server running without pairing (SKETCHPAD_NO_TOKEN) has to fall back on.
-export function pairingURL({ host, port, token, code }) {
-  const credential = code ? `&code=${encodeURIComponent(code)}` : token ? `&token=${encodeURIComponent(token)}` : ''
-  return { host: `${host}:${port}`, token: token || null, code: code || null, url: `sketchpad://pair?host=${host}:${port}${credential}` }
+/// What the QR encodes. A `code` is exchanged for a key of the device's own; a `token` is that key
+/// directly, which is what a server running without pairing has to fall back on. `fp` is the
+/// certificate fingerprint the iPad pins — the reason a self-signed certificate is safe here is that
+/// this arrives by a channel nobody on the network can touch.
+export function pairingURL({ host, port, token, code, scheme = 'http', fingerprint }) {
+  const parts = [`host=${host}:${port}`]
+  if (code) parts.push(`code=${encodeURIComponent(code)}`)
+  else if (token) parts.push(`token=${encodeURIComponent(token)}`)
+  if (scheme !== 'http') parts.push(`scheme=${scheme}`)
+  if (fingerprint) parts.push(`fp=${fingerprint}`)
+  return {
+    host: `${host}:${port}`, token: token || null, code: code || null,
+    scheme, fingerprint: fingerprint || null,
+    url: `sketchpad://pair?${parts.join('&')}`
+  }
 }
 
 /// Printed to stderr, never stdout: in stdio mode stdout is the MCP transport.
-export function printPairing({ host, port, token, code }) {
-  const { url } = pairingURL({ host, port, token, code })
+export function printPairing({ host, port, token, code, scheme, fingerprint }) {
+  const { url } = pairingURL({ host, port, token, code, scheme, fingerprint })
   const out = s => process.stderr.write(s + '\n')
   out('')
   out('  iPad    open Sketchpad — it finds this computer on the network. Or scan:')
@@ -34,7 +46,7 @@ export function printPairing({ host, port, token, code }) {
   out('')
   // The QR carries the token, so the only thing worth saying is whether there is one.
   out(code
-    ? '  Locked  this code pairs one iPad, once, within ten minutes.'
+    ? `  Locked  this code pairs one iPad, once, within ten minutes.${fingerprint ? ' Encrypted.' : ''}`
     : token
       ? '  Locked  only devices holding this key can connect.'
       : '  OPEN    no token: anyone on this network can read your canvas and this machine\'s files.')

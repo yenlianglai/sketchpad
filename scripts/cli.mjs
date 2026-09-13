@@ -18,6 +18,7 @@ import qrcode from 'qrcode-terminal'
 import { autostartPlan } from './autostart.mjs'
 import { configHome } from '../server/paths.mjs'
 import { loadOrCreateToken } from '../server/auth.mjs'
+import { localFetch, localURL } from '../server/local-fetch.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const ENTRY = join(ROOT, 'server', 'index.mjs')
@@ -45,7 +46,7 @@ const run = ({ file, args }) => {
 const ask = async (path, init = {}) => {
   const { token } = loadOrCreateToken()
   try {
-    const res = await fetch(`http://127.0.0.1:${PORT}${path}`, {
+    const res = await localFetch()(`${localURL()}${path}`, {
       ...init,
       headers: { ...(init.headers ?? {}), ...(token ? { authorization: `Bearer ${token}` } : {}) },
       signal: AbortSignal.timeout(1500)

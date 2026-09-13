@@ -20,21 +20,24 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { loadOrCreateToken } from './auth.mjs'
 import { spoolDir, serverLogPath } from './paths.mjs'
+import { localFetch, localURL } from './local-fetch.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
-const BASE = (process.env.SKETCHPAD_URL || 'http://127.0.0.1:8791').replace(/\/+$/, '')
+const BASE = localURL()
 const AUTOSTART = process.env.SKETCHPAD_NO_AUTOSTART !== '1'
 // The server on this machine keeps its token in a file only this user can read, so the wrapper can
 // simply pick it up rather than having it configured in every MCP client.
 const { token: TOKEN } = loadOrCreateToken()
 const AUTH = TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}
+// The server signs its own certificate, so trust that one rather than the public CA list.
+let fetchLocal = localFetch()
 const log = (...a) => console.error('[sketchpad-mcp]', ...a)
 
 const health = async (ms = 1200) => {
   try {
     const c = AbortSignal.timeout(ms)
-    const r = await fetch(`${BASE}/health`, { signal: c, headers: AUTH })
+    const r = await fetchLocal(`${BASE}/health`, { signal: c, headers: AUTH })
     return r.ok ? await r.json() : null
   } catch { return null }
 }
@@ -43,7 +46,7 @@ async function ensureServer() {
   const alive = await health()
   if (alive) { log(`using the sketchpad already running at ${BASE}`); return true }
   if (!AUTOSTART) { log(`no sketchpad at ${BASE} and autostart is off`); return false }
-  if (!BASE.startsWith('http://127.0.0.1') && !BASE.startsWith('http://localhost')) {
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(BASE)) {
     log(`no sketchpad at ${BASE}; it is not on this machine, so it cannot be started from here`)
     return false
   }
@@ -60,6 +63,8 @@ async function ensureServer() {
   // winner's server here. So poll health rather than trusting our own child.
   for (let i = 0; i < 40; i++) {
     await new Promise(r => setTimeout(r, 400))
+    // The certificate may not have existed when this process started; pick it up once it does.
+    fetchLocal = localFetch()
     if (await health(800)) { log('sketchpad is up'); return true }
   }
   log(`sketchpad did not come up within 16s — see ${serverLogPath()}`)
@@ -70,7 +75,10 @@ let upstream = null
 async function connectUpstream() {
   if (upstream) return upstream
   const client = new Client({ name: 'sketchpad-stdio-proxy', version: '0.1.0' })
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { requestInit: { headers: AUTH } }))
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), {
+    requestInit: { headers: AUTH },
+    fetch: (input, init) => fetchLocal(input, init)
+  }))
   upstream = client
   return client
 }

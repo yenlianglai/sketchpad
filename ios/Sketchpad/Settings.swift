@@ -11,6 +11,9 @@ final class Settings: ObservableObject {
     /// host:port of the Mac server's plain-http listener (the one that also serves /mcp).
     @Published var host: String { didSet { d.set(host, forKey: "host") } }
     @Published var token: String { didSet { d.set(token, forKey: "token") } }
+    /// sha256 of the Mac's self-signed certificate, taken from the pairing QR. Empty means plain
+    /// http — there is no certificate authority on a home network, so this is what trust rests on.
+    @Published var fingerprint: String { didSet { d.set(fingerprint, forKey: "fingerprint") } }
     /// Fingers pan and zoom, only the Pencil draws. Off lets a finger draw, for iPads without a Pencil.
     @Published var pencilOnly: Bool { didSet { d.set(pencilOnly, forKey: "pencilOnly") } }
     @Published var paper: Paper { didSet { d.set(paper.rawValue, forKey: "paper") } }
@@ -23,6 +26,7 @@ final class Settings: ObservableObject {
         #endif
         host = d.string(forKey: "host") ?? defaultHost
         token = d.string(forKey: "token") ?? ""
+        fingerprint = d.string(forKey: "fingerprint") ?? ""
         pencilOnly = d.object(forKey: "pencilOnly") as? Bool ?? true
         paper = Paper(rawValue: d.string(forKey: "paper") ?? "") ?? .plain
     }
