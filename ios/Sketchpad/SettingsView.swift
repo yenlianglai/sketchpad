@@ -67,7 +67,7 @@ struct ConnectionCard: View {
             if discovered.isEmpty {
                 ProgressView().controlSize(.large)
                 Text("Looking for your Mac").font(.headline)
-                Text("Start Sketchpad on the Mac with `npm run web-only`, and keep both on the same network.")
+                Text("Start Sketchpad on the Mac with `sketchpad start`, and keep both on the same network.")
                     .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
             } else {
                 Text("Found your Mac").font(.headline)

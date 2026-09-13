@@ -27,7 +27,7 @@ const json = (res, value) => send(res, 200, JSON.stringify(value), 'application/
 
 const stripDataURL = s => s.replace(/^data:image\/png;base64,/, '')
 
-export function createRoutes({ state, hub, authorize, pairingURL, log = () => {} }) {
+export function createRoutes({ state, hub, devices, authorize, pairingURL, log = () => {} }) {
   /// Stateless Streamable HTTP: a fresh transport and server per request, all sharing one state.
   async function handleMCP(req, res) {
     let body
@@ -81,7 +81,30 @@ export function createRoutes({ state, hub, authorize, pairingURL, log = () => {}
         return json(res, state.repliesSince(Number(url.searchParams.get('since') || 0)))
       }
 
-      if (url.pathname === '/pair') return json(res, pairingURL())
+      // An iPad exchanging the code from the QR for a key of its own. The code is the credential
+      // here, so this is the one route that does not need a key — it is how you get one.
+      if (req.method === 'POST' && url.pathname === '/pair') {
+        const body = JSON.parse((await readBody(req)).toString('utf8'))
+        const paired = devices.redeem(body.code, body.name)
+        if (!paired) return send(res, 403, 'that pairing code is wrong, already used, or expired')
+        log(`paired "${paired.name}"`)
+        return json(res, paired)
+      }
+
+      // `sketchpad pair` asks the running server for a fresh code, rather than minting one in a
+      // second process that the server would know nothing about.
+      if (url.pathname === '/pair') {
+        const code = url.searchParams.get('new') === '1' ? devices.mintCode().code : devices.pendingCode()
+        return json(res, pairingURL(code))
+      }
+
+      if (url.pathname === '/devices') {
+        if (req.method === 'DELETE') {
+          const id = url.searchParams.get('id') ?? ''
+          return devices.revoke(id) ? json(res, { revoked: id }) : send(res, 404, 'no such device')
+        }
+        return json(res, devices.list())
+      }
 
       if (url.pathname === '/health') {
         return json(res, {

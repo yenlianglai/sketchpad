@@ -2,9 +2,9 @@ import SwiftUI
 import AVFoundation
 
 /// Camera QR scanner for pairing. Accepts what the Mac prints at startup
-/// (`sketchpad://pair?host=…&token=…`) and also a bare `192.168.0.9:8791` or `http://…`.
+/// (`sketchpad://pair?host=…&code=…`) and also a bare `192.168.0.9:8791` or `http://…`.
 struct QRScannerSheet: View {
-    var onPaired: (String, String?) -> Void
+    var onPaired: (String, Credential?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var denied = false
 
@@ -35,22 +35,31 @@ struct QRScannerSheet: View {
     }
 
     private func handle(_ code: String) {
-        guard let (host, token) = Self.parse(code) else { return }
+        guard let (host, credential) = Self.parse(code) else { return }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        onPaired(host, token)
+        onPaired(host, credential)
         dismiss()
     }
 
-    /// → (host:port, token)
-    static func parse(_ code: String) -> (String, String?)? {
+    /// What the QR hands over. A `code` is exchanged for this iPad's own key and is good once;
+    /// a `token` is a key directly, which is what a server running without pairing prints.
+    enum Credential: Equatable {
+        case code(String)
+        case token(String)
+    }
+
+    /// → (host:port, credential)
+    static func parse(_ code: String) -> (String, Credential?)? {
         let s = code.trimmingCharacters(in: .whitespacesAndNewlines)
         if let c = URLComponents(string: s), let scheme = c.scheme?.lowercased() {
             let items = c.queryItems ?? []
-            let token = items.first { $0.name == "token" }?.value
+            // A pairing code wins: a QR carrying both is a server being kind to an older app.
+            let credential: Credential? = items.first { $0.name == "code" }?.value.map(Credential.code)
+                ?? items.first { $0.name == "token" }?.value.map(Credential.token)
             if scheme == "sketchpad" {
-                if let h = items.first(where: { $0.name == "host" })?.value, !h.isEmpty { return (h, token) }
+                if let h = items.first(where: { $0.name == "host" })?.value, !h.isEmpty { return (h, credential) }
             } else if scheme == "http" || scheme == "https" {
-                if let h = c.host { return (c.port.map { "\(h):\($0)" } ?? h, token) }
+                if let h = c.host { return (c.port.map { "\(h):\($0)" } ?? h, credential) }
             }
         }
         // Bare host:port

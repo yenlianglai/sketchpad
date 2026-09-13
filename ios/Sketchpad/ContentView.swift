@@ -94,11 +94,30 @@ struct ContentView: View {
         .onChange(of: showSettings) { _, shown in if !shown && !layerMode { canvasController.setToolPickerVisible(true) } }
         .sheet(isPresented: $showSettings) { SettingsView(onScan: { showSettings = false; showScanner = true }).environmentObject(settings).environmentObject(conn) }
         .sheet(isPresented: $showScanner) {
-            QRScannerSheet { host, token in
-                settings.host = host
-                if let token { settings.token = token }
-                conn.reconnectNow()
-                showFlash("Paired with \(host)")
+            QRScannerSheet { host, credential in
+                switch credential {
+                case .token(let token):
+                    settings.host = host
+                    settings.token = token
+                    conn.reconnectNow()
+                    showFlash("Paired with \(host)")
+                case .code(let code):
+                    Task {
+                        do {
+                            let token = try await conn.redeem(code: code, at: host)
+                            settings.host = host
+                            settings.token = token
+                            conn.reconnectNow()
+                            showFlash("Paired with \(host)")
+                        } catch {
+                            showFlash(error.localizedDescription)
+                        }
+                    }
+                case .none:
+                    settings.host = host
+                    conn.reconnectNow()
+                    showFlash("Connecting to \(host)")
+                }
             }
         }
         .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }

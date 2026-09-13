@@ -12,7 +12,8 @@ import { createState } from './state.mjs'
 import { createRoutes } from './routes.mjs'
 import { advertiseBonjour, lanIP, pairingURL, printPairing } from './pairing.mjs'
 import { loadOrCreateToken, makeAuthorizer } from './auth.mjs'
-import { spoolDir } from './paths.mjs'
+import { spoolDir, configDir } from './paths.mjs'
+import { createDevices } from './devices.mjs'
 
 // Nothing durable lives here. The iPad keeps the pages; this is only what is in flight — a page an
 // agent is reading, a file it handed over, a reply the iPad has not collected yet. Deleting it
@@ -21,7 +22,7 @@ const SPOOL_DIR = spoolDir()
 
 const PORT = Number(process.env.SKETCHPAD_PORT ?? 8791)
 // Generated on first run and kept, so there is no unprotected default. SKETCHPAD_NO_TOKEN=1 opts out.
-const { token: TOKEN, source: TOKEN_SOURCE } = loadOrCreateToken()
+const { token: TOKEN } = loadOrCreateToken()
 const HOST = process.env.SKETCHPAD_HOST || lanIP()
 const QUIET = process.env.SKETCHPAD_QUIET === '1'
 
@@ -38,17 +39,12 @@ state.prune()
 // An iPad that connects mid-session should see the current state, not a blank one.
 hub.onGreeting(() => ({ type: 'hello', listening: state.isListening() }))
 
-// `sketchpad pair` wants the QR without a second server fighting for the port.
-if (process.env.SKETCHPAD_PAIR_ONLY === '1') {
-  printPairing({ host: HOST, port: PORT, token: TOKEN, tokenSource: TOKEN_SOURCE })
-  process.exit(0)
-}
-
-const authorize = makeAuthorizer({ token: TOKEN, allowRemoteMCP: process.env.SKETCHPAD_MCP_REMOTE === '1' })
+const devices = createDevices({ dir: configDir() })
+const authorize = makeAuthorizer({ token: TOKEN, devices, allowRemoteMCP: process.env.SKETCHPAD_MCP_REMOTE === '1' })
 const server = createServer(createRoutes({
-  state, hub,
+  state, hub, devices,
   authorize,
-  pairingURL: () => pairingURL({ host: HOST, port: PORT, token: TOKEN }),
+  pairingURL: code => pairingURL({ host: HOST, port: PORT, token: TOKEN, code }),
   log: QUIET ? () => {} : log
 }))
 hub.attachTo(server, { authorize })
@@ -65,6 +61,7 @@ server.on('error', err => {
 })
 
 server.listen(PORT, '0.0.0.0', () => {
-  if (!QUIET) printPairing({ host: HOST, port: PORT, token: TOKEN, tokenSource: TOKEN_SOURCE })
+  // A token that was never paired for (SKETCHPAD_NO_TOKEN, or one set by hand) has no code to mint.
+  if (!QUIET) printPairing({ host: HOST, port: PORT, token: TOKEN, code: TOKEN ? devices.mintCode().code : null })
   advertiseBonjour({ port: PORT, log })
 })

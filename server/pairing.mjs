@@ -13,14 +13,16 @@ export function lanIP() {
   return 'localhost'
 }
 
-export function pairingURL({ host, port, token }) {
-  const url = `sketchpad://pair?host=${host}:${port}` + (token ? `&token=${encodeURIComponent(token)}` : '')
-  return { host: `${host}:${port}`, token: token || null, url }
+/// What the QR encodes. A `code` is exchanged for a key of the device's own; a `token` is that key
+/// directly, which is what a server running without pairing (SKETCHPAD_NO_TOKEN) has to fall back on.
+export function pairingURL({ host, port, token, code }) {
+  const credential = code ? `&code=${encodeURIComponent(code)}` : token ? `&token=${encodeURIComponent(token)}` : ''
+  return { host: `${host}:${port}`, token: token || null, code: code || null, url: `sketchpad://pair?host=${host}:${port}${credential}` }
 }
 
 /// Printed to stderr, never stdout: in stdio mode stdout is the MCP transport.
-export function printPairing({ host, port, token, tokenSource }) {
-  const { url } = pairingURL({ host, port, token })
+export function printPairing({ host, port, token, code }) {
+  const { url } = pairingURL({ host, port, token, code })
   const out = s => process.stderr.write(s + '\n')
   out('')
   out('  iPad    open Sketchpad — it finds this computer on the network. Or scan:')
@@ -31,9 +33,11 @@ export function printPairing({ host, port, token, tokenSource }) {
   out('  Agent   sketchpad install')
   out('')
   // The QR carries the token, so the only thing worth saying is whether there is one.
-  out(token
-    ? '  Locked  only devices that scan this code can connect.'
-    : '  OPEN    no token: anyone on this network can read your canvas and this machine\'s files.')
+  out(code
+    ? '  Locked  this code pairs one iPad, once, within ten minutes.'
+    : token
+      ? '  Locked  only devices holding this key can connect.'
+      : '  OPEN    no token: anyone on this network can read your canvas and this machine\'s files.')
   out('')
 }
 

@@ -10,10 +10,23 @@ final class PairingTests: XCTestCase {
         XCTAssertNil(r?.1)
     }
 
+    func testPairingCode() {
+        let r = QRScannerSheet.parse("sketchpad://pair?host=mac.local:8791&code=abc123")
+        XCTAssertEqual(r?.0, "mac.local:8791")
+        XCTAssertEqual(r?.1, .code("abc123"))
+    }
+
+    /// A server running without pairing prints its key directly, and older QRs carry one too.
     func testPairingURLWithToken() {
         let r = QRScannerSheet.parse("sketchpad://pair?host=mac.local:8791&token=s3cret")
         XCTAssertEqual(r?.0, "mac.local:8791")
-        XCTAssertEqual(r?.1, "s3cret")
+        XCTAssertEqual(r?.1, .token("s3cret"))
+    }
+
+    /// A code is exchanged for a key of this device's own, so it is the better of the two.
+    func testCodeWinsOverToken() {
+        let r = QRScannerSheet.parse("sketchpad://pair?host=mac.local:8791&token=s3cret&code=abc123")
+        XCTAssertEqual(r?.1, .code("abc123"))
     }
 
     func testHttpURL() {

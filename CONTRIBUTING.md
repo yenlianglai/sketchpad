@@ -6,6 +6,7 @@
 server/
   index.mjs         wiring: config, the http server, and starting the rest
   auth.mjs          the token, and who is allowed to reach what
+  devices.mjs       paired iPads: the pairing code, their keys, revoking one
   paths.mjs         where things go on each platform
   hub.mjs           the iPads currently connected — broadcast, clientCount
   state.mjs         what is in flight: the queue, questions for the iPad, the spool
@@ -68,6 +69,7 @@ The suites are deliberately different shapes:
 - `test/http.test.mjs` — a real server process, a real MCP client, a stand-in iPad on the WebSocket.
 - `test/stdio.test.mjs` — the wrapper, spawned the way a desktop client spawns it.
 - `test/auth.test.mjs` — who gets in. Every case here was once allowed.
+- `test/devices.test.mjs` — pairing: a code good once, briefly, and revoking one device.
 - `test/platform.test.mjs` — the paths that differ per platform, checked against a stand-in home,
   since the suite only ever runs on one platform at a time.
 - `test/autostart.test.mjs` — the login-item plan for all three platforms, without installing one.

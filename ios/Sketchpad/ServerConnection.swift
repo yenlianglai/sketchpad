@@ -85,6 +85,27 @@ final class ServerConnection: NSObject, ObservableObject {
         session.dataTask(with: req).resume()
     }
 
+    /// Exchange a pairing code for this iPad's own key. The code is good once, so this is the only
+    /// chance to keep what comes back.
+    func redeem(code: String, at host: String) async throws -> String {
+        guard let base = URL(string: "http://\(host)") else {
+            throw NSError(domain: "sketchpad", code: 4, userInfo: [NSLocalizedDescriptionKey: "That address is not valid"])
+        }
+        var req = URLRequest(url: base.appendingPathComponent("pair"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["code": code, "name": UIDevice.current.name])
+
+        let (data, resp) = try await session.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200,
+              let token = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["token"] as? String else {
+            throw NSError(domain: "sketchpad", code: 5, userInfo: [
+                NSLocalizedDescriptionKey: "That code did not work — it pairs one iPad once, and only for ten minutes. Run `sketchpad pair` for a new one."
+            ])
+        }
+        return token
+    }
+
     /// Download an agent file to a local URL.
     func download(_ url: URL, to dest: URL) async throws {
         let (data, resp) = try await session.data(for: authorized(url))

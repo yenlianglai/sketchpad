@@ -45,12 +45,19 @@ export const sameSecret = (a, b) => {
 
 export const isLoopback = req => LOOPBACK.has(req?.socket?.remoteAddress ?? '')
 
-/// Decides every request. `/mcp` is held to a stricter rule than the iPad's routes: the agent runs
-/// on this machine, so there is no reason for the tools to be reachable from the network at all.
-export function makeAuthorizer({ token, allowRemoteMCP = false }) {
+/// Decides every request.
+///
+/// Three rules, in order. `/mcp` is held to a stricter one than the iPad's routes: the agent runs on
+/// this machine, so there is no reason for the tools to be reachable from the network at all.
+/// Pairing carries its own credential — the code — and so cannot require a key the device does not
+/// have yet. Everything else takes the machine's own token, or the key of a paired device.
+export function makeAuthorizer({ token, devices = null, allowRemoteMCP = false }) {
   return function authorize(req, url) {
     if (url.pathname === '/mcp' && !allowRemoteMCP && !isLoopback(req)) return false
+    if (url.pathname === '/pair' && req?.method === 'POST') return true
     if (!token) return true
-    return sameSecret(presentedToken(req, url), token)
+
+    const presented = presentedToken(req, url)
+    return sameSecret(presented, token) || (devices?.accepts(presented) ?? false)
   }
 }

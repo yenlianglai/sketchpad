@@ -65,8 +65,9 @@ brew install xcodegen
 cd ios && xcodegen generate && open Sketchpad.xcodeproj
 ```
 
-Pick your team under Signing & Capabilities, plug in the iPad, Run. The app finds your computer over
-Bonjour; if your network blocks that, tap **Scan the QR code** and point the camera at the terminal.
+Pick your team under Signing & Capabilities, plug in the iPad, Run. Then tap **Scan the QR code** and
+point the camera at the terminal. The code pairs that one iPad, once, and gives it a key of its own —
+`sketchpad devices` lists them, `sketchpad revoke <id>` takes one back.
 
 **4. Draw.** Say `/sketchpad` to your agent, or just "listen to the iPad".
 
@@ -135,8 +136,9 @@ Three environment variables worth knowing:
   as a mode you switch on and off.
 - **Your drawings live on the iPad.** The Mac keeps nothing — it passes a page to the agent, then
   forgets it. That is why looking back at old pages needs the iPad awake.
-- **Locked by default.** A token is generated on first run, so only a device that scanned your QR
-  can connect. The agent's own endpoint is not reachable from the network at all.
+- **Locked by default.** Only iPads you have paired can connect, each with its own key, and the
+  agent's endpoint is not reachable from the network at all. The QR carries a code that pairs one
+  device once and expires in ten minutes, so a photo of your screen is worth nothing later.
 - **Same network only.** No relay, no cloud, no account.
 - **Sketchpad places diagrams, it does not render them.** Give it a PNG or SVG and it becomes a
   layer; an agent that wants to send a Mermaid chart needs its own way to turn one into an image.
