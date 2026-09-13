@@ -91,8 +91,9 @@ npm run test:mcp
 - **agent 的回覆一律先進預覽佇列**，不會自己動你的畫布：左下角堆卡片，附縮圖，按「Place」或直接把縮圖拖到畫布上決定位置，或關掉（內容留在 Turns）。斷線期間的回覆會在重連時補上。
 - 手繪 SVG 落地後是**可編輯筆跡**（逐筆畫出，帶來源標記）；mermaid / draw.io / 生成圖落地後是**圖層**（放在筆跡下方，長按抓取、拖曳、雙指縮放、鎖定、上下層）。
 - 多頁畫板（Pages 分頁）：縮圖牆、改名、複製、刪除、agent 可用 `sketchpad_set_title` 建議標題。Media 分頁列出這頁所有的圖，可分享或放成圖層。
-- 送出時**上次已送過的筆跡淡成灰色、新筆跡保留原色**（可關）。回合切分三選一：按送出、Pencil 雙擊、停筆 N 秒自動送出。
-- 畫圖時 UI 全部淡出、右軌滑出螢幕，抬筆一秒回來。紙張可選空白／點陣／格線。
+- 送出時**上次已送過的筆跡淡成灰色、新筆跡保留原色**，agent 一眼看出新增的部分。送出只有一個觸發點：Send 鈕。
+- 畫圖時浮動 UI 淡出，右軌和抽屜不動（會滑走的東西會把人困住）。抬筆一秒回來。
+- 設定只剩四項：Mac 位址、Token（進階）、紙張、只接受 Pencil。其餘都是行為不是選項。
 
 需求：Xcode 26、iPadOS 17+。專案用 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 產生：
 
@@ -104,8 +105,12 @@ cd ios && xcodegen generate && open Sketchpad.xcodeproj
 裝到自己的 iPad：Xcode 裡選 Sketchpad target › Signing & Capabilities › Team 選你的 Apple ID（免費帳號可，7 天要重簽），
 接上 iPad 按 Run。第一次 iPad 會問「允許尋找區域網路裝置」，要允許，Bonjour 才找得到 Mac。
 
-Mac 端一樣 `npm run web-only`。app 對 Mac 走 **8791 純 http**（`NSAllowsLocalNetworking`），不需要憑證；
-沒被自動找到時到設定手動填 `IP:8791`。模擬器版預設連 `127.0.0.1:8791`。
+Mac 端一樣 `npm run web-only`。app 對 Mac 走 **8791 純 http**（`NSAllowsLocalNetworking`），不需要憑證，
+也不需要打 port：app 用 Bonjour 自己找到 Mac，首次啟動會顯示找到的機器讓你點。找不到時設定 › 進階可手動填 `IP:8791`。
+模擬器版預設連 `127.0.0.1:8791`。
+
+server 啟動時會印出 agent 端要跑的那一行 `claude mcp add`。8791 被占用時不會偷偷換 port（換了會讓已註冊的 MCP url 失效），
+而是直接告訴你誰占著。
 
 模擬器編譯（不需要 `sudo xcode-select`，用 `DEVELOPER_DIR` 即可）：
 

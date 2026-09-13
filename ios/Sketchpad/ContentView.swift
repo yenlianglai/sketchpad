@@ -18,7 +18,6 @@ struct ContentView: View {
     @State private var layerMode = false
     @State private var sending = false
     @State private var flash: String?
-    @State private var autoSendTask: Task<Void, Never>?
     /// Agent replies wait here until you place or dismiss them; nothing lands on the canvas by itself.
     @State private var replyQueue: [PendingReply] = []
     @State private var dragGhost: (image: UIImage, point: CGPoint, size: CGSize)?
@@ -30,106 +29,49 @@ struct ContentView: View {
     private let drawerWidth: CGFloat = 356
 
     private var newStrokeCount: Int { max(0, drawing.strokes.count - store.current.sentStrokeCount) }
-    private var chromeHidden: Bool { settings.autoHideChrome && canvasController.isDrawing }
+    /// While the pen is down the floating chrome fades. The rail and drawer never move: they sit at
+    /// the edge, they are not in the way, and anything that slides off-screen can strand you.
+    private var chromeHidden: Bool { canvasController.isDrawing }
     private var rightInset: CGFloat { railWidth + (showDrawer ? drawerWidth : 0) }
 
-    var body: some View {
+    /// Floating chrome over the canvas: it fades while the pen is down.
+    private var floatingChrome: some View {
         ZStack(alignment: .topLeading) {
-            CanvasView(drawing: $drawing, controller: canvasController, pencilOnly: settings.pencilOnly, paper: settings.paper,
-                       layers: store.current.layers, layerImage: { store.image(named: $0.file, in: store.layersDir) },
-                       onStrokesChanged: strokesChanged,
-                       onPencilDoubleTap: settings.pencilDoubleTapSends ? { Task { await send() } } : nil,
-                       onLayerLongPress: { id in
-                           // A stroke may have started under the press; drop it if it is a fresh dot.
-                           if let last = drawing.strokes.last, last.path.count <= 3, drawing.strokes.count > store.current.sentStrokeCount {
-                               drawing = PKDrawing(strokes: drawing.strokes.dropLast()); strokesChanged()
-                           }
-                           setLayerMode(true); selectedLayerID = id
-                           showFlash("Layer grabbed — drag to move, pinch to resize")
-                       })
-                .ignoresSafeArea()
-
-            if layerMode {
-                LayerModeOverlay(layers: store.current.layers, selectedID: $selectedLayerID, controller: canvasController, onChange: { store.updateLayer($0) })
-                    .padding(.trailing, rightInset)
-            }
-            if let id = selectedLayerID, let layer = store.current.layers.first(where: { $0.id == id }) {
-                LayerOverlay(layer: layer, controller: canvasController,
-                             onChange: { store.updateLayer($0) },
-                             onDelete: { store.removeLayer(id); selectedLayerID = nil },
-                             onDone: { selectedLayerID = nil; if store.current.layers.isEmpty { setLayerMode(false) } },
-                             onToFront: { var b = store.current; if let i = b.layers.firstIndex(where: { $0.id == id }) { let l = b.layers.remove(at: i); b.layers.append(l); store.current = b } },
-                             onToBack: { var b = store.current; if let i = b.layers.firstIndex(where: { $0.id == id }) { let l = b.layers.remove(at: i); b.layers.insert(l, at: 0); store.current = b } })
-                    .padding(.trailing, rightInset)
-            }
-
-            topBar.opacity(chromeHidden ? 0 : 1)
-            sendButton.opacity(chromeHidden ? 0 : 1)
-
-            if !replyQueue.isEmpty {
-                VStack { Spacer()
-                    ReplyQueueView(replies: replyQueue,
-                                   onPlace: { place($0, at: nil) },
-                                   onDismiss: { r in withAnimation { replyQueue.removeAll { $0.id == r.id } } },
-                                   onOpen: { _ in toggleDrawer(.turns) },
-                                   onDragChanged: { r, p in
-                                       guard let img = r.preview else { return }
-                                       let w: CGFloat = 170
-                                       dragGhost = (img, p, CGSize(width: w, height: w * img.size.height / max(1, img.size.width)))
-                                   },
-                                   onDragEnded: { r, p in
-                                       dragGhost = nil
-                                       guard let canvas = canvasController.canvas else { return }
-                                       let local = canvas.convert(p, from: nil)
-                                       guard local.x < canvas.bounds.width - rightInset else { return }
-                                       place(r, at: canvasController.canvasPoint(fromView: local))
-                                   })
-                    // Clear of the floating PencilKit tool picker along the bottom.
-                    .padding(.leading, 20).padding(.bottom, 150)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .opacity(chromeHidden ? 0 : 1)
-            }
-
-            if let flash { toast(flash) }
-
-            // Right side: drawer + rail slide off-screen while drawing; a handle stays.
-            HStack(spacing: 0) {
-                if showDrawer {
-                    Drawer(tab: $tab, actions: drawerActions).frame(width: drawerWidth).transition(.move(edge: .trailing))
-                }
-                rail
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-            .offset(x: chromeHidden ? rightInset : 0)
-
-            if chromeHidden {
-                // Handle to bring the rail back by hand; a big enough target for a finger or a Pencil.
-                Button { canvasController.isDrawing = false } label: {
-                    Image(systemName: "chevron.left").font(.caption.weight(.bold)).foregroundStyle(.secondary)
-                        .frame(width: 24, height: 72).background(.regularMaterial, in: UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12))
-                        .overlay(UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12).stroke(.black.opacity(0.06)))
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-            }
+            topBar
+            sendButton
+            replyCards
         }
-        .overlay {
-            GeometryReader { g in
-                if let ghost = dragGhost {
-                    let o = g.frame(in: .global).origin
-                    DragGhost(image: ghost.image, point: CGPoint(x: ghost.point.x - o.x, y: ghost.point.y - o.y), size: ghost.size)
-                }
-            }
-            .ignoresSafeArea().allowsHitTesting(false)
+        .opacity(chromeHidden ? 0 : 1)
+    }
+
+    @ViewBuilder private var connectionCard: some View {
+        if settings.host.isEmpty {
+            ConnectionCard(discovered: conn.discovered, onPick: { settings.host = $0 }, onManual: { showSettings = true })
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.trailing, rightInset)
         }
+    }
+
+    private var stack: some View {
+        ZStack(alignment: .topLeading) {
+            canvas
+            layerOverlays
+            floatingChrome
+            sidebar
+            connectionCard
+        }
+    }
+
+    var body: some View {
+        stack
+        .overlay { ghostOverlay }
         .animation(.easeInOut(duration: 0.22), value: chromeHidden)
         .animation(.spring(duration: 0.28), value: replyQueue)
         .animation(.easeInOut(duration: 0.22), value: showDrawer)
         .animation(.easeInOut(duration: 0.2), value: flash)
         .onAppear { loadCurrentBoard(); wireEvents() }
         .onChange(of: store.currentID) { _, _ in selectedLayerID = nil; loadCurrentBoard() }
-        .onChange(of: canvasController.isDrawing) { _, drawing in if !layerMode { canvasController.setToolPickerVisible(!(drawing && settings.autoHideChrome)) } }
+        .onChange(of: canvasController.isDrawing) { _, isDrawing in if !layerMode { canvasController.setToolPickerVisible(!isDrawing) } }
         .onChange(of: showDrawer) { _, _ in if !layerMode && !canvasController.isDrawing { canvasController.setToolPickerVisible(true) } }
         .onChange(of: conn.status) { _, s in
             guard s == .connected else { return }
@@ -140,6 +82,101 @@ struct ContentView: View {
         .onChange(of: showSettings) { _, shown in if !shown && !layerMode { canvasController.setToolPickerVisible(true) } }
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(settings).environmentObject(conn) }
         .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }
+    }
+
+    // MARK: pieces
+
+    private var canvas: some View {
+        CanvasView(drawing: $drawing, controller: canvasController, pencilOnly: settings.pencilOnly, paper: settings.paper,
+                   layers: store.current.layers, layerImage: { store.image(named: $0.file, in: store.layersDir) },
+                   onStrokesChanged: strokesChanged,
+                   onLayerLongPress: grabLayer)
+            .ignoresSafeArea()
+    }
+
+    private func grabLayer(_ id: UUID) {
+        // A stroke may have started under the press; drop it if it is just a fresh dot.
+        if let last = drawing.strokes.last, last.path.count <= 3, drawing.strokes.count > store.current.sentStrokeCount {
+            drawing = PKDrawing(strokes: drawing.strokes.dropLast()); strokesChanged()
+        }
+        setLayerMode(true)
+        selectedLayerID = id
+        showFlash("Layer grabbed — drag to move, pinch to resize")
+    }
+
+    @ViewBuilder private var layerOverlays: some View {
+        if layerMode {
+            LayerModeOverlay(layers: store.current.layers, selectedID: $selectedLayerID, controller: canvasController, onChange: { store.updateLayer($0) })
+                .padding(.trailing, rightInset)
+        }
+        if let id = selectedLayerID, let layer = store.current.layers.first(where: { $0.id == id }) {
+            LayerOverlay(layer: layer, controller: canvasController,
+                         onChange: { store.updateLayer($0) },
+                         onDelete: { store.removeLayer(id); selectedLayerID = nil },
+                         onDone: { selectedLayerID = nil; if store.current.layers.isEmpty { setLayerMode(false) } },
+                         onToFront: { reorderLayer(id, toFront: true) },
+                         onToBack: { reorderLayer(id, toFront: false) })
+                .padding(.trailing, rightInset)
+        }
+    }
+
+    private func reorderLayer(_ id: UUID, toFront: Bool) {
+        var b = store.current
+        guard let i = b.layers.firstIndex(where: { $0.id == id }) else { return }
+        let l = b.layers.remove(at: i)
+        if toFront { b.layers.append(l) } else { b.layers.insert(l, at: 0) }
+        store.current = b
+    }
+
+    private var sidebar: some View {
+        HStack(spacing: 0) {
+            if showDrawer {
+                Drawer(tab: $tab, actions: drawerActions).frame(width: drawerWidth).transition(.move(edge: .trailing))
+            }
+            rail.opacity(chromeHidden && !showDrawer ? 0.45 : 1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+    }
+
+    @ViewBuilder private var replyCards: some View {
+        if !replyQueue.isEmpty {
+            VStack {
+                Spacer()
+                ReplyQueueView(replies: replyQueue,
+                               onPlace: { place($0, at: nil) },
+                               onDismiss: { r in withAnimation { replyQueue.removeAll { $0.id == r.id } } },
+                               onOpen: { _ in toggleDrawer(.turns) },
+                               onDragChanged: ghostFollow,
+                               onDragEnded: dropReply)
+                    // Clear of the floating PencilKit tool picker along the bottom.
+                    .padding(.leading, 20).padding(.bottom, 150)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func ghostFollow(_ r: PendingReply, _ p: CGPoint) {
+        guard let img = r.preview else { return }
+        let w: CGFloat = 170
+        dragGhost = (img, p, CGSize(width: w, height: w * img.size.height / max(1, img.size.width)))
+    }
+
+    private var ghostOverlay: some View {
+        GeometryReader { g in
+            if let ghost = dragGhost {
+                let o = g.frame(in: .global).origin
+                DragGhost(image: ghost.image, point: CGPoint(x: ghost.point.x - o.x, y: ghost.point.y - o.y), size: ghost.size)
+            }
+        }
+        .ignoresSafeArea().allowsHitTesting(false)
+    }
+
+    private func dropReply(_ r: PendingReply, _ p: CGPoint) {
+        dragGhost = nil
+        guard let canvas = canvasController.canvas else { return }
+        let local = canvas.convert(p, from: nil)
+        guard local.x < canvas.bounds.width - rightInset else { return }   // dropped on the rail or drawer
+        place(r, at: canvasController.canvasPoint(fromView: local))
     }
 
     // MARK: chrome
@@ -285,17 +322,6 @@ struct ContentView: View {
         b.drawing = drawing
         b.sentStrokeCount = min(b.sentStrokeCount, drawing.strokes.count)
         store.current = b
-        scheduleAutoSend()
-    }
-
-    private func scheduleAutoSend() {
-        autoSendTask?.cancel()
-        guard settings.autoSendSeconds > 0, newStrokeCount > 0 else { return }
-        autoSendTask = Task {
-            try? await Task.sleep(nanoseconds: UInt64(settings.autoSendSeconds * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            await send()
-        }
     }
 
     private func layerImage(_ l: Layer) -> UIImage? { store.image(named: l.file, in: store.layersDir) }
@@ -304,13 +330,15 @@ struct ContentView: View {
         TurnRenderer.render(drawing, layers: store.current.layers, layerImage: layerImage, sentStrokeCount: store.current.sentStrokeCount, highlightNew: highlight)
     }
 
+    private func send() async { await sendTurn() }
+
     // MARK: send
 
     @MainActor
-    private func send() async {
-        autoSendTask?.cancel()
+    private func sendTurn() async {
         guard !sending else { return }
-        guard let out = renderCurrent(highlight: settings.highlightNewStrokes) else { return }
+        // Strokes the agent has already seen are greyed out so the new ones stand out; always on.
+        guard let out = renderCurrent(highlight: true) else { return }
         sending = true
         defer { sending = false }
         let board = store.current

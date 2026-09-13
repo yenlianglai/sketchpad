@@ -289,37 +289,76 @@ struct SettingsView: View {
     @EnvironmentObject var settings: Settings
     @EnvironmentObject var conn: ServerConnection
     @Environment(\.dismiss) var dismiss
+    @State private var showManual = false
+
+    private var statusLine: String {
+        switch conn.status {
+        case .connected: return conn.agentListening ? "Connected · an agent is listening" : "Connected · no agent listening yet"
+        case .connecting: return "Connecting…"
+        case .disconnected: return "Not connected"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("Agent") {
-                    TextField("Host:port (e.g. 192.168.0.128:8791)", text: $settings.host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                    if !conn.discovered.isEmpty {
-                        ForEach(conn.discovered, id: \.self) { h in Button { settings.host = h } label: { Label(h, systemImage: "bonjour") } }
-                    } else {
-                        Text("No Mac found on the network yet. Run `npm run web-only` on the Mac.").font(.footnote).foregroundStyle(.secondary)
+                Section {
+                    LabeledContent("Mac") { Text(settings.host.isEmpty ? "not set" : settings.host).foregroundStyle(.secondary) }
+                    HStack(spacing: 8) {
+                        Circle().fill(conn.status == .connected ? (conn.agentListening ? Color.green : Color.orange) : Color.red).frame(width: 8, height: 8)
+                        Text(statusLine).font(.subheadline).foregroundStyle(.secondary)
                     }
-                    TextField("Token (optional)", text: $settings.token).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    LabeledContent("Agent") { Text(conn.agentListening ? "listening" : (conn.status == .connected ? "server up, nobody listening" : "offline")).foregroundStyle(.secondary) }
-                    if let e = conn.lastError { Text(e).font(.footnote).foregroundStyle(.red) }
+                    ForEach(conn.discovered.filter { $0 != settings.host }, id: \.self) { h in
+                        Button { settings.host = h } label: { Label("Switch to \(h)", systemImage: "bonjour") }
+                    }
+                    if let e = conn.lastError, conn.status != .connected { Text(e).font(.footnote).foregroundStyle(.red) }
+                } header: { Text("Connection") } footer: {
+                    Text("Sketchpad finds your Mac on the network by itself. Start it there with `npm run web-only`.")
                 }
-                Section("Send") {
-                    Picker("Auto-send after pen idle", selection: $settings.autoSendSeconds) {
-                        Text("Off").tag(0.0); Text("2 s").tag(2.0); Text("3 s").tag(3.0); Text("5 s").tag(5.0)
-                    }.pickerStyle(.segmented)
-                    Toggle("Pencil double-tap sends", isOn: $settings.pencilDoubleTapSends)
-                    Toggle("Highlight new strokes", isOn: $settings.highlightNewStrokes)
-                }
-                Section("Apple Pencil") {
-                    Toggle("Pencil only (fingers pan and zoom)", isOn: $settings.pencilOnly)
-                }
+
                 Section("Canvas") {
                     Picker("Paper", selection: $settings.paper) { Text("Plain").tag(Paper.plain); Text("Dots").tag(Paper.dots); Text("Grid").tag(Paper.grid) }.pickerStyle(.segmented)
-                    Toggle("Auto-hide UI while drawing", isOn: $settings.autoHideChrome)
+                    Toggle("Pencil only", isOn: $settings.pencilOnly)
+                    Text("Fingers pan and zoom; only the Pencil draws. Turn off to draw with a finger.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+
+                Section {
+                    DisclosureGroup("Advanced", isExpanded: $showManual) {
+                        TextField("Address (e.g. 192.168.0.128:8791)", text: $settings.host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        TextField("Token", text: $settings.token).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    }
                 }
             }
             .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+    }
+}
+
+/// Shown over the canvas until an iPad has a Mac to talk to.
+struct ConnectionCard: View {
+    let discovered: [String]
+    var onPick: (String) -> Void
+    var onManual: () -> Void
+    var body: some View {
+        VStack(spacing: 14) {
+            if discovered.isEmpty {
+                ProgressView().controlSize(.large)
+                Text("Looking for your Mac").font(.headline)
+                Text("Start Sketchpad on the Mac with `npm run web-only`, and keep both on the same network.")
+                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            } else {
+                Text("Found your Mac").font(.headline)
+                ForEach(discovered, id: \.self) { h in
+                    Button { onPick(h) } label: { Label(h, systemImage: "laptopcomputer").frame(maxWidth: .infinity) }
+                        .buttonStyle(.borderedProminent).tint(.black).controlSize(.large)
+                }
+            }
+            Button("Enter an address instead", action: onManual).font(.subheadline)
+        }
+        .padding(28).frame(maxWidth: 420)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.14), radius: 20, y: 8)
     }
 }

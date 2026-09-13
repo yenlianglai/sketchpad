@@ -290,12 +290,27 @@ ol li{margin:8px 0}code{background:#eee;padding:2px 6px;border-radius:4px}</styl
     return handle(req, res)
   })
   plain.on('upgrade', upgrade)
+  plain.on('error', err => portError(err, PORT + 1))
   plain.listen(PORT + 1, '0.0.0.0', () => {
-    log(`MCP endpoint (Streamable HTTP): http://localhost:${PORT + 1}/mcp${TOKEN ? '?token=***' : ''}`)
-    log(`iPad app / plain http: http://${HOST_HINT}:${PORT + 1}/`)
-    if (tls) log(`cert install page for the web UI: http://${HOST_HINT}:${PORT + 1}/cert`)
+    log('')
+    log(`  iPad:  nothing to set up — the app finds this Mac on the network`)
+    log(`  Agent: claude mcp add --scope user --transport http sketchpad http://localhost:${PORT + 1}/mcp`)
+    if (tls) log(`  Web UI cert: http://${HOST_HINT}:${PORT + 1}/cert`)
+    log('')
     advertiseBonjour(PORT + 1)
   })
+}
+
+// The registered MCP url carries this port, so never silently move: say what is holding it.
+function portError(err, port) {
+  if (err.code === 'EADDRINUSE') {
+    log(`port ${port} is already in use — another Sketchpad server is probably running.`)
+    log(`  check:  lsof -nP -iTCP:${port} -sTCP:LISTEN`)
+    log(`  or run: pkill -f "server/channel.mjs"`)
+  } else {
+    log(`cannot listen on ${port}: ${err.message}`)
+  }
+  process.exit(1)
 }
 
 // Bonjour so the iPad app finds this Mac without typing an IP. Uses macOS's dns-sd; no deps.
@@ -310,6 +325,7 @@ function advertiseBonjour(port) {
   log(`bonjour: advertising "${name}" as _sketchpad._tcp on ${port}`)
 }
 
+httpServer.on('error', err => portError(err, PORT))
 httpServer.listen(PORT, '0.0.0.0', () => {
   log(`web UI on ${tls ? 'https' : 'http'}://0.0.0.0:${PORT}${TOKEN ? '/?token=***' : ''}  (tls=${tls}, driver=${DRIVER}, cwd=${WORK_DIR})`)
   if (!tls) log('no certs/ found: iPad Safari will refuse the microphone over plain http. Run: npm run cert')

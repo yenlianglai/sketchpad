@@ -69,7 +69,6 @@ struct CanvasView: UIViewRepresentable {
     var layers: [Layer]
     var layerImage: (Layer) -> UIImage?
     var onStrokesChanged: () -> Void
-    var onPencilDoubleTap: (() -> Void)?
     /// Long-pressing a layer (finger or Pencil) while drawing: hand the layer id back so the app can enter layer mode.
     var onLayerLongPress: ((UUID) -> Void)?
 
@@ -107,10 +106,6 @@ struct CanvasView: UIViewRepresentable {
             canvas.topAnchor.constraint(equalTo: container.topAnchor), canvas.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
 
-        let interaction = UIPencilInteraction()
-        interaction.delegate = context.coordinator
-        canvas.addInteraction(interaction)
-
         // Long-press on a layer → layer mode. Only begins when the touch lands on a layer, so
         // ordinary drawing is untouched; when it fires it cancels the in-progress stroke.
         let press = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.longPress(_:)))
@@ -147,7 +142,7 @@ struct CanvasView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    final class Coordinator: NSObject, PKCanvasViewDelegate, UIPencilInteractionDelegate, UIGestureRecognizerDelegate {
+    final class Coordinator: NSObject, PKCanvasViewDelegate, UIGestureRecognizerDelegate {
         var parent: CanvasView
         var updatingFromCanvas = false
         weak var canvas: PKCanvasView?
@@ -172,6 +167,8 @@ struct CanvasView: UIViewRepresentable {
             parent.onLayerLongPress?(l.id)
         }
 
+
+
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             updatingFromCanvas = true
             parent.drawing = canvasView.drawing
@@ -191,6 +188,5 @@ struct CanvasView: UIViewRepresentable {
             if c.zoom != s.zoomScale { c.zoom = s.zoomScale }
         }
 
-        func pencilInteractionDidTap(_ interaction: UIPencilInteraction) { parent.onPencilDoubleTap?() }
     }
 }
