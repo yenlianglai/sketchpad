@@ -13,16 +13,28 @@
 		3367A50B00011648EBE2EF91 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0C86C586FA2411F65CCBCE7 /* Models.swift */; };
 		52623790AF8980281682BF31 /* ServerConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174F5814B810E56DBB486170 /* ServerConnection.swift */; };
 		5344DA013F11F6A0BF374138 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39EF633D5F393E123E6361C1 /* Settings.swift */; };
+		5A3484A174AD0C7F5E1D67A9 /* PairingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2ED34DB572B94E28390A828 /* PairingTests.swift */; };
 		719316EECC7E1673C8F6AC4F /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBF324F1804467D6D607D673 /* QRScanner.swift */; };
 		79AC6DE959935BB91DF11E79 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DA319B7A0ABEA2F42EEF6E4 /* ContentView.swift */; };
 		7F84624131C533373F710CD2 /* LayerHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 514EFB18FF2E83CD66251213 /* LayerHostView.swift */; };
 		830D1B94A05B4304DE4F8B2B /* ReplyQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039553C37D1F5E91955EA437 /* ReplyQueue.swift */; };
 		928B7AA06CE142B39FA641B5 /* SVGStrokes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401EDFB6C9F9DBEC6CAB4882 /* SVGStrokes.swift */; };
+		E0B7D28EDC369341C5B3452A /* SVGStrokesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E6674681F8D20F0D1449AF5 /* SVGStrokesTests.swift */; };
 		E2C3A299941BD2C557137CD5 /* LayerOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEBA921E3F71217E05F46DA /* LayerOverlay.swift */; };
 		E53CC37A4E56B79482D7DF06 /* CanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF9CA4D0417B10AB050A75C /* CanvasView.swift */; };
 		F46F312ACC0231AE1B90D727 /* TurnRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF502298A2C010FE66163AF /* TurnRenderer.swift */; };
 		FBA455FBE54A2E53C7AACE7D /* LayerModeOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4B4C7EF300C5CE855CAF200 /* LayerModeOverlay.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		39168601EE431D9E712CF383 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1AFD38FB308575A3F21B5D00 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B62022AA2E17DFF18AF3246D;
+			remoteInfo = Sketchpad;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		039553C37D1F5E91955EA437 /* ReplyQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyQueue.swift; sourceTree = "<group>"; };
@@ -33,6 +45,7 @@
 		3BF502298A2C010FE66163AF /* TurnRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnRenderer.swift; sourceTree = "<group>"; };
 		401EDFB6C9F9DBEC6CAB4882 /* SVGStrokes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGStrokes.swift; sourceTree = "<group>"; };
 		4CD656CBA4190A5C2B4F7BDC /* BoardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardStore.swift; sourceTree = "<group>"; };
+		4E6674681F8D20F0D1449AF5 /* SVGStrokesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGStrokesTests.swift; sourceTree = "<group>"; };
 		514EFB18FF2E83CD66251213 /* LayerHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerHostView.swift; sourceTree = "<group>"; };
 		74A1C02BC436487CB30DCB62 /* Sketchpad.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Sketchpad.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8AF9CA4D0417B10AB050A75C /* CanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasView.swift; sourceTree = "<group>"; };
@@ -40,7 +53,9 @@
 		BBF324F1804467D6D607D673 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
 		BE399589066DF03F9B44CBC3 /* DrawerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerViews.swift; sourceTree = "<group>"; };
 		C43E4564781061F22876585D /* SketchpadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SketchpadApp.swift; sourceTree = "<group>"; };
+		D2ED34DB572B94E28390A828 /* PairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingTests.swift; sourceTree = "<group>"; };
 		D4B4C7EF300C5CE855CAF200 /* LayerModeOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerModeOverlay.swift; sourceTree = "<group>"; };
+		ECEC2431C4EB89695CA7EDF3 /* SketchpadTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SketchpadTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0C86C586FA2411F65CCBCE7 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -49,6 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				85F036F878F1C63A86C123B1 /* Sketchpad */,
+				B7E5FB5B0533DDD99B5360E4 /* SketchpadTests */,
 				D3EC52A6840ADA1833EF7C8F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -76,10 +92,20 @@
 			path = Sketchpad;
 			sourceTree = "<group>";
 		};
+		B7E5FB5B0533DDD99B5360E4 /* SketchpadTests */ = {
+			isa = PBXGroup;
+			children = (
+				D2ED34DB572B94E28390A828 /* PairingTests.swift */,
+				4E6674681F8D20F0D1449AF5 /* SVGStrokesTests.swift */,
+			);
+			path = SketchpadTests;
+			sourceTree = "<group>";
+		};
 		D3EC52A6840ADA1833EF7C8F /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				74A1C02BC436487CB30DCB62 /* Sketchpad.app */,
+				ECEC2431C4EB89695CA7EDF3 /* SketchpadTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,6 +113,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0CBA2AAEBD909CDD1BBBDB3E /* SketchpadTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1E2CFB8AC45DDD23402B26D9 /* Build configuration list for PBXNativeTarget "SketchpadTests" */;
+			buildPhases = (
+				E451BA958E3B585FE42547A1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8497215B9EC219F5567E8EC2 /* PBXTargetDependency */,
+			);
+			name = SketchpadTests;
+			packageProductDependencies = (
+			);
+			productName = SketchpadTests;
+			productReference = ECEC2431C4EB89695CA7EDF3 /* SketchpadTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		B62022AA2E17DFF18AF3246D /* Sketchpad */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C51CDA79F7859F9DFD2762DA /* Build configuration list for PBXNativeTarget "Sketchpad" */;
@@ -134,6 +178,7 @@
 			projectRoot = "";
 			targets = (
 				B62022AA2E17DFF18AF3246D /* Sketchpad */,
+				0CBA2AAEBD909CDD1BBBDB3E /* SketchpadTests */,
 			);
 		};
 /* End PBXProject section */
@@ -161,7 +206,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E451BA958E3B585FE42547A1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A3484A174AD0C7F5E1D67A9 /* PairingTests.swift in Sources */,
+				E0B7D28EDC369341C5B3452A /* SVGStrokesTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8497215B9EC219F5567E8EC2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B62022AA2E17DFF18AF3246D /* Sketchpad */;
+			targetProxy = 39168601EE431D9E712CF383 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		038A375C8187DA066DC0871D /* Release */ = {
@@ -283,6 +345,24 @@
 			};
 			name = Debug;
 		};
+		0B84DD20F0195343A5E6CCF3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylai.sketchpad.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Sketchpad.app/Sketchpad";
+			};
+			name = Release;
+		};
 		14133AC875161017B1DCD948 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -329,6 +409,24 @@
 			};
 			name = Debug;
 		};
+		DA747D47FAA5E0AFC597B17E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rylai.sketchpad.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Sketchpad.app/Sketchpad";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -337,6 +435,15 @@
 			buildConfigurations = (
 				05436E4079585A061662C73E /* Debug */,
 				038A375C8187DA066DC0871D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1E2CFB8AC45DDD23402B26D9 /* Build configuration list for PBXNativeTarget "SketchpadTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA747D47FAA5E0AFC597B17E /* Debug */,
+				0B84DD20F0195343A5E6CCF3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

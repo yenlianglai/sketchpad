@@ -41,3 +41,25 @@ targets:
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_PREVIEWS: true
+  SketchpadTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SketchpadTests
+    dependencies:
+      - target: Sketchpad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rylai.sketchpad.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.9"
+schemes:
+  Sketchpad:
+    build:
+      targets:
+        Sketchpad: all
+        SketchpadTests: [test]
+    test:
+      targets: [SketchpadTests]
+    run:
+      config: Debug
