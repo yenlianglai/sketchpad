@@ -214,8 +214,13 @@ async function handle(req, res) {
       broadcast({ type: 'turn', turnId, text: body.text, pngPath, delivered, ts: Date.now() })
       return send(res, 200, JSON.stringify({ turnId, pngPath, delivered }), 'application/json')
     }
+    if (url.pathname === '/replies') {
+      // What the iPad missed while it was disconnected.
+      const since = Number(url.searchParams.get('since') || 0)
+      return send(res, 200, JSON.stringify(sketchpad.recentReplies(since)), 'application/json')
+    }
     if (url.pathname === '/health') {
-      return send(res, 200, JSON.stringify({ ok: true, driver: DRIVER, mcp: mcpReady, clients: sockets.size, pending_turns: sketchpad.pending() }), 'application/json')
+      return send(res, 200, JSON.stringify({ ok: true, driver: DRIVER, mcp: mcpReady, clients: sockets.size, pending_turns: sketchpad.pending(), agent_listening: sketchpad.isListening() }), 'application/json')
     }
     if (url.pathname.startsWith('/files/')) {
       const f = basename(url.pathname)
@@ -251,7 +256,7 @@ function upgrade(req, socket, head) {
   if (url.pathname !== '/ws' || !authorized(url)) { socket.destroy(); return }
   wss.handleUpgrade(req, socket, head, ws => {
     sockets.add(ws)
-    ws.send(JSON.stringify({ type: 'hello', mcp: mcpReady, tls, mode: DRIVER, sessionId: headless?.sessionId }))
+    ws.send(JSON.stringify({ type: 'hello', mcp: mcpReady, tls, mode: DRIVER, listening: sketchpad.isListening(), sessionId: headless?.sessionId }))
     ws.on('close', () => sockets.delete(ws))
   })
 }

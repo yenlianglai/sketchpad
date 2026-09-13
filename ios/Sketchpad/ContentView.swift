@@ -19,6 +19,12 @@ struct ContentView: View {
     @State private var sending = false
     @State private var flash: String?
     @State private var autoSendTask: Task<Void, Never>?
+    /// Agent replies wait here until you place or dismiss them; nothing lands on the canvas by itself.
+    @State private var replyQueue: [PendingReply] = []
+    @State private var dragGhost: (image: UIImage, point: CGPoint, size: CGSize)?
+    /// So a reply sent while the iPad was asleep or off the network is picked up on reconnect, once.
+    @AppStorage("lastReplyTs") private var lastReplyTs: Double = 0
+    @State private var seenReplyIDs: Set<String> = []
 
     private let railWidth: CGFloat = 48
     private let drawerWidth: CGFloat = 356
@@ -59,6 +65,32 @@ struct ContentView: View {
 
             topBar.opacity(chromeHidden ? 0 : 1)
             sendButton.opacity(chromeHidden ? 0 : 1)
+
+            if !replyQueue.isEmpty {
+                VStack { Spacer()
+                    ReplyQueueView(replies: replyQueue,
+                                   onPlace: { place($0, at: nil) },
+                                   onDismiss: { r in withAnimation { replyQueue.removeAll { $0.id == r.id } } },
+                                   onOpen: { _ in toggleDrawer(.turns) },
+                                   onDragChanged: { r, p in
+                                       guard let img = r.preview else { return }
+                                       let w: CGFloat = 170
+                                       dragGhost = (img, p, CGSize(width: w, height: w * img.size.height / max(1, img.size.width)))
+                                   },
+                                   onDragEnded: { r, p in
+                                       dragGhost = nil
+                                       guard let canvas = canvasController.canvas else { return }
+                                       let local = canvas.convert(p, from: nil)
+                                       guard local.x < canvas.bounds.width - rightInset else { return }
+                                       place(r, at: canvasController.canvasPoint(fromView: local))
+                                   })
+                    // Clear of the floating PencilKit tool picker along the bottom.
+                    .padding(.leading, 20).padding(.bottom, 150)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(chromeHidden ? 0 : 1)
+            }
+
             if let flash { toast(flash) }
 
             // Right side: drawer + rail slide off-screen while drawing; a handle stays.
@@ -82,13 +114,29 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             }
         }
+        .overlay {
+            GeometryReader { g in
+                if let ghost = dragGhost {
+                    let o = g.frame(in: .global).origin
+                    DragGhost(image: ghost.image, point: CGPoint(x: ghost.point.x - o.x, y: ghost.point.y - o.y), size: ghost.size)
+                }
+            }
+            .ignoresSafeArea().allowsHitTesting(false)
+        }
         .animation(.easeInOut(duration: 0.22), value: chromeHidden)
+        .animation(.spring(duration: 0.28), value: replyQueue)
         .animation(.easeInOut(duration: 0.22), value: showDrawer)
         .animation(.easeInOut(duration: 0.2), value: flash)
         .onAppear { loadCurrentBoard(); wireEvents() }
         .onChange(of: store.currentID) { _, _ in selectedLayerID = nil; loadCurrentBoard() }
         .onChange(of: canvasController.isDrawing) { _, drawing in if !layerMode { canvasController.setToolPickerVisible(!(drawing && settings.autoHideChrome)) } }
         .onChange(of: showDrawer) { _, _ in if !layerMode && !canvasController.isDrawing { canvasController.setToolPickerVisible(true) } }
+        .onChange(of: conn.status) { _, s in
+            guard s == .connected else { return }
+            // First run: start from now rather than replaying the whole history.
+            if lastReplyTs == 0 { lastReplyTs = Date().timeIntervalSince1970; return }
+            Task { for r in await conn.missedReplies(since: lastReplyTs) { handleReply(r) } }
+        }
         .onChange(of: showSettings) { _, shown in if !shown && !layerMode { canvasController.setToolPickerVisible(true) } }
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(settings).environmentObject(conn) }
         .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }
@@ -105,7 +153,7 @@ struct ContentView: View {
                 Button { showDrawer = true; tab = .pages } label: { Label("All pages…", systemImage: "square.grid.2x2") }
             } label: {
                 HStack(spacing: 10) {
-                    Circle().fill(conn.status == .connected ? (conn.agentReady ? Color.green : Color.orange) : Color.red).frame(width: 8, height: 8)
+                    Circle().fill(conn.status == .connected ? (conn.agentListening ? Color.green : Color.orange) : Color.red).frame(width: 8, height: 8)
                     Text(store.current.title).font(.subheadline.weight(.semibold)).lineLimit(1)
                     Text(statusText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.secondary)
@@ -141,8 +189,11 @@ struct ContentView: View {
     }
 
     private var statusText: String {
+        if sending { return "sending…" }
         switch conn.status {
-        case .connected: return conn.agentReady ? "agent listening" : (sending ? "sending…" : "saved")
+        case .connected:
+            if store.currentTurns.last?.taken == true, store.currentTurns.last?.agentText == nil { return "agent reading…" }
+            return conn.agentListening ? "agent listening" : "nobody listening"
         case .connecting: return "connecting…"
         case .disconnected: return "offline"
         }
@@ -299,6 +350,10 @@ struct ContentView: View {
     }
 
     private func handleReply(_ r: Reply) {
+        guard !seenReplyIDs.contains(r.id) else { return }
+        seenReplyIDs.insert(r.id)
+        if r.ts > lastReplyTs { lastReplyTs = r.ts }
+
         var turnId = r.turnId.flatMap { id in store.turn(id) != nil ? id : nil } ?? store.currentTurns.last?.id
         if turnId == nil {
             // Agent spoke first: anchor the reply to a synthetic turn on the current page, in the visible area.
@@ -311,37 +366,70 @@ struct ContentView: View {
         guard let turnId, let turn = store.turn(turnId) else { showFlash(r.text); return }
         if !r.text.isEmpty { store.update(turnId) { $0.agentText = ($0.agentText.map { $0 + "\n" } ?? "") + r.text; $0.taken = true } }
         if !(showDrawer && tab == .turns) { unread += 1 }
+
+        // A text-only reply is its own card; otherwise the text rides on the first file's card.
+        var textForCard = r.text
+        if r.files.isEmpty {
+            if !r.text.isEmpty { replyQueue.append(PendingReply(turnId: turnId, itemId: UUID(), kind: "text", text: r.text)) }
+            return
+        }
+
         for f in r.files {
-            var item = AgentItem(kind: f.kind, svg: f.svg, file: nil, remoteURL: f.remoteURL?.absoluteString, wantsLayer: f.layer)
+            let item = AgentItem(kind: f.kind, svg: f.svg, file: nil, remoteURL: f.remoteURL?.absoluteString, wantsLayer: f.layer)
+            store.update(turnId) { $0.agentItems.append(item) }
+            let cardText = textForCard; textForCard = ""
+
             if f.kind == "sketch" {
-                store.update(turnId) { $0.agentItems.append(item) }
-                if settings.autoPlaceAgentDrawing, turn.boardID == store.currentID { placeSketch(turn: store.turn(turnId)!, item: item, announce: true) }
+                let preview = f.svg.flatMap { SVGStrokes.preview(svg: $0, maxSize: CGSize(width: 276, height: 150)) }
+                replyQueue.append(PendingReply(turnId: turnId, itemId: item.id, kind: "sketch", text: cardText, preview: preview, suggested: true))
             } else if let url = f.remoteURL {
                 let ext = (f.name as NSString).pathExtension.isEmpty ? "png" : (f.name as NSString).pathExtension
                 let name = "\(item.id.uuidString).\(ext)"
-                store.update(turnId) { $0.agentItems.append(item) }
+                let card = PendingReply(turnId: turnId, itemId: item.id, kind: f.kind, text: cardText, downloading: true, suggested: f.layer)
+                replyQueue.append(card)
                 Task {
                     do {
                         try await conn.download(url, to: store.agentFileURL(name))
-                        item.file = name
                         store.update(turnId) { t in if let i = t.agentItems.firstIndex(where: { $0.id == item.id }) { t.agentItems[i].file = name } }
-                        if f.layer, turn.boardID == store.currentID { placeLayer(turn: store.turn(turnId)!, item: store.turn(turnId)!.agentItems.first { $0.id == item.id }!) }
-                        else { showFlash("Agent sent a \(f.kind) image") }
-                    } catch { showFlash("Could not download \(f.name)") }
+                        let img = store.image(named: name, in: store.agentDir)
+                        if let i = replyQueue.firstIndex(where: { $0.id == card.id }) {
+                            replyQueue[i].downloading = false
+                            replyQueue[i].preview = img
+                            replyQueue[i].failed = img == nil
+                        }
+                    } catch {
+                        if let i = replyQueue.firstIndex(where: { $0.id == card.id }) { replyQueue[i].downloading = false; replyQueue[i].failed = true }
+                    }
                 }
             }
         }
     }
 
+    /// Accept one queued reply: strokes join the drawing, images become a layer. `at` is the canvas
+    /// point you dropped it on; nil means the agent's own placement (aligned with the turn image).
+    private func place(_ reply: PendingReply, at point: CGPoint?) {
+        guard let turn = store.turn(reply.turnId), let item = turn.agentItems.first(where: { $0.id == reply.itemId }) else { return }
+        guard turn.boardID == store.currentID else { showFlash("That reply belongs to another page"); return }
+        if reply.kind == "sketch" { placeSketch(turn: turn, item: item, at: point, announce: true) }
+        else { placeLayer(turn: turn, item: item, at: point) }
+        withAnimation { replyQueue.removeAll { $0.id == reply.id } }
+    }
+
     // MARK: placing agent output
 
     /// Convert the agent's SVG into pen strokes aligned with the turn's image, appended one by one.
-    private func placeSketch(turn: Turn, item: AgentItem, announce: Bool) {
+    private func placeSketch(turn: Turn, item: AgentItem, at point: CGPoint? = nil, announce: Bool) {
         guard let svg = item.svg, turn.boardID == store.currentID else { return }
         let mapping = SVGStrokeMapping(origin: turn.imageBounds.origin, pixelsPerPoint: turn.imageScale, viewBox: nil, imageSize: CGSize(width: turn.imageBounds.width * turn.imageScale, height: turn.imageBounds.height * turn.imageScale))
         let base = Date()
-        let strokes = SVGStrokes.strokes(from: svg, mapping: mapping, defaultColor: Settings.agentColor, baseDate: base)
+        var strokes = SVGStrokes.strokes(from: svg, mapping: mapping, defaultColor: Settings.agentColor, baseDate: base)
         guard !strokes.isEmpty else { if announce { showFlash("Nothing in the agent's SVG could become strokes") }; return }
+        if let point {
+            // Dropped somewhere specific: move the whole group so its centre lands there.
+            let b = PKDrawing(strokes: strokes).bounds
+            let d = CGPoint(x: point.x - b.midX, y: point.y - b.midY)
+            strokes = strokes.map { s in var s = s; s.transform = s.transform.concatenating(CGAffineTransform(translationX: d.x, y: d.y)); return s }
+        }
         let before = drawing
         let dates = strokes.map { $0.path.creationDate.timeIntervalSince1970 }
         store.recordAgentStrokes(turnId: turn.id, dates: dates)
@@ -360,7 +448,7 @@ struct ContentView: View {
     }
 
     /// Put an agent image onto the canvas as a layer, sized to fit the visible area, below the drawing when possible.
-    private func placeLayer(turn: Turn, item: AgentItem) {
+    private func placeLayer(turn: Turn, item: AgentItem, at point: CGPoint? = nil) {
         guard let file = item.file, let img = store.image(named: file, in: store.agentDir) else { showFlash("Image not downloaded yet"); return }
         // The canvas runs under the rail/drawer; only the uncovered part counts as visible.
         var visible = canvasController.visibleCanvasRect
@@ -369,7 +457,8 @@ struct ContentView: View {
         var w = img.size.width / 2, h = img.size.height / 2
         let k = min(1, min(maxW / w, maxH / h)); w *= k; h *= k
         var origin = CGPoint(x: visible.midX - w / 2, y: visible.midY - h / 2)
-        if !drawing.strokes.isEmpty, drawing.bounds.maxY + 40 + h < visible.maxY { origin = CGPoint(x: max(visible.minX + 20, drawing.bounds.minX), y: drawing.bounds.maxY + 40) }
+        if let point { origin = CGPoint(x: point.x - w / 2, y: point.y - h / 2) }
+        else if !drawing.strokes.isEmpty, drawing.bounds.maxY + 40 + h < visible.maxY { origin = CGPoint(x: max(visible.minX + 20, drawing.bounds.minX), y: drawing.bounds.maxY + 40) }
         guard let layer = store.addLayer(fromAgentFile: file, kind: item.kind, turnId: turn.id, frame: CGRect(origin: origin, size: CGSize(width: w, height: h))) else { return }
         store.update(turn.id) { t in if let i = t.agentItems.firstIndex(where: { $0.id == item.id }) { t.agentItems[i].placedAsLayer = true } }
         setLayerMode(true)
@@ -385,7 +474,7 @@ struct ContentView: View {
     private var drawerActions: DrawerActions {
         DrawerActions(
             placeSketch: { t, i in placeSketch(turn: t, item: i, announce: true) },
-            placeLayer: { t, i in placeLayer(turn: t, item: i) },
+            placeLayer: { t, i in placeLayer(turn: t, item: i, at: nil) },
             branch: branch,
             preview: { previewTurn = $0 },
             removeAgentStrokes: { t in store.removeAgentStrokes(turnId: t.id, from: &drawing); showFlash("Removed the agent's strokes from that turn") },

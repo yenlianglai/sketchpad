@@ -300,7 +300,7 @@ struct SettingsView: View {
                         Text("No Mac found on the network yet. Run `npm run web-only` on the Mac.").font(.footnote).foregroundStyle(.secondary)
                     }
                     TextField("Token (optional)", text: $settings.token).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Toggle("Place agent drawings on canvas", isOn: $settings.autoPlaceAgentDrawing)
+                    LabeledContent("Agent") { Text(conn.agentListening ? "listening" : (conn.status == .connected ? "server up, nobody listening" : "offline")).foregroundStyle(.secondary) }
                     if let e = conn.lastError { Text(e).font(.footnote).foregroundStyle(.red) }
                 }
                 Section("Send") {

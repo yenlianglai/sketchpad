@@ -55,6 +55,32 @@ enum SVGStrokes {
         }
     }
 
+    /// Small rendering of what the agent drew, for the reply card.
+    static func preview(svg: String, maxSize: CGSize) -> UIImage? {
+        let mapping = SVGStrokeMapping(origin: .zero, pixelsPerPoint: 1, viewBox: nil, imageSize: .zero)
+        let strokes = strokes(from: svg, mapping: mapping, defaultColor: Settings.agentColor)
+        guard !strokes.isEmpty else { return nil }
+        let drawing = PKDrawing(strokes: strokes)
+        var b = drawing.bounds.insetBy(dx: -8, dy: -8)
+        guard b.width > 0, b.height > 0 else { return nil }
+        let scale = min(maxSize.width / b.width, maxSize.height / b.height)
+        // Keep the aspect of the content; the card sizes itself to the result.
+        let size = CGSize(width: b.width * scale, height: b.height * scale)
+        let format = UIGraphicsImageRendererFormat(); format.opaque = true; format.scale = UIScreen.main.scale
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            UIColor.white.setFill(); ctx.fill(CGRect(origin: .zero, size: size))
+            UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
+                drawing.image(from: b, scale: scale).draw(in: CGRect(origin: .zero, size: size))
+            }
+        }
+    }
+
+    /// Bounds the strokes would occupy on the canvas, for centring on a drop point.
+    static func bounds(from svg: String, mapping: SVGStrokeMapping) -> CGRect? {
+        let s = strokes(from: svg, mapping: mapping, defaultColor: .black)
+        return s.isEmpty ? nil : PKDrawing(strokes: s).bounds
+    }
+
     // MARK: - parsing
 
     struct Shape { var points: [CGPoint]; var color: UIColor?; var strokeWidth: CGFloat?; var sharp: Bool }

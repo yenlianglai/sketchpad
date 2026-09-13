@@ -14,7 +14,6 @@ final class Settings: ObservableObject {
     @Published var autoSendSeconds: Double { didSet { d.set(autoSendSeconds, forKey: "autoSend") } }
     @Published var pencilOnly: Bool { didSet { d.set(pencilOnly, forKey: "pencilOnly") } }
     @Published var highlightNewStrokes: Bool { didSet { d.set(highlightNewStrokes, forKey: "diff") } }
-    @Published var autoPlaceAgentDrawing: Bool { didSet { d.set(autoPlaceAgentDrawing, forKey: "autoPlace") } }
     @Published var pencilDoubleTapSends: Bool { didSet { d.set(pencilDoubleTapSends, forKey: "dtSend") } }
     @Published var autoHideChrome: Bool { didSet { d.set(autoHideChrome, forKey: "autoHide") } }
     @Published var paper: Paper { didSet { d.set(paper.rawValue, forKey: "paper") } }
@@ -30,7 +29,6 @@ final class Settings: ObservableObject {
         autoSendSeconds = d.object(forKey: "autoSend") as? Double ?? 0
         pencilOnly = d.object(forKey: "pencilOnly") as? Bool ?? true
         highlightNewStrokes = d.object(forKey: "diff") as? Bool ?? true
-        autoPlaceAgentDrawing = d.object(forKey: "autoPlace") as? Bool ?? true
         pencilDoubleTapSends = d.object(forKey: "dtSend") as? Bool ?? false
         autoHideChrome = d.object(forKey: "autoHide") as? Bool ?? true
         paper = Paper(rawValue: d.string(forKey: "paper") ?? "") ?? .plain

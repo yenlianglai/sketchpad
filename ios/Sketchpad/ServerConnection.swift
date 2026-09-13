@@ -4,7 +4,7 @@ import UIKit
 
 /// A file the agent handed back with a reply.
 struct ReplyFile { var kind: String; var name: String; var svg: String?; var remoteURL: URL?; var layer: Bool }
-struct Reply { var text: String; var turnId: String?; var files: [ReplyFile] }
+struct Reply { var id: String; var ts: Double; var text: String; var turnId: String?; var files: [ReplyFile] }
 
 /// Finds the Mac server (Bonjour `_sketchpad._tcp`, or a manual host) and talks to it:
 /// POST /turn for sketches, WebSocket /ws for replies and requests.
@@ -14,7 +14,10 @@ final class ServerConnection: NSObject, ObservableObject {
     enum Event { case reply(Reply), taken(String), title(boardId: String?, title: String), snapshotRequest(String), system(String) }
 
     @Published var status: Status = .disconnected
+    /// The server is up. Says nothing about whether an agent is in the loop.
     @Published var agentReady = false
+    /// An agent is actually blocked in wait_for_turn (or polled moments ago).
+    @Published var agentListening = false
     @Published var discovered: [String] = []
     @Published var lastError: String?
 
@@ -113,6 +116,7 @@ final class ServerConnection: NSObject, ObservableObject {
                 case .failure(let err):
                     self.status = .disconnected
                     self.agentReady = false
+                    self.agentListening = false
                     self.lastError = err.localizedDescription
                     self.scheduleReconnect()
                 }
@@ -145,19 +149,11 @@ final class ServerConnection: NSObject, ObservableObject {
         switch type {
         case "hello", "mcp":
             agentReady = (m["ready"] as? Bool) ?? (m["mcp"] as? Bool) ?? false
+            if let l = m["listening"] as? Bool { agentListening = l }
+        case "agents":
+            agentListening = m["listening"] as? Bool ?? false
         case "reply":
-            var files: [ReplyFile] = []
-            for f in (m["files"] as? [[String: Any]]) ?? [] {
-                guard let url = f["url"] as? String else { continue }
-                let kind = f["kind"] as? String ?? "image"
-                let name = f["name"] as? String ?? "file"
-                if url.hasPrefix("data:image/svg+xml;base64,"), let d = Data(base64Encoded: String(url.dropFirst("data:image/svg+xml;base64,".count))) {
-                    files.append(ReplyFile(kind: "sketch", name: name, svg: String(data: d, encoding: .utf8), remoteURL: nil, layer: false))
-                } else if url.hasPrefix("/"), let base = baseURL {
-                    files.append(ReplyFile(kind: kind, name: name, svg: nil, remoteURL: withToken(base.appendingPathComponent(url)), layer: f["layer"] as? Bool ?? false))
-                }
-            }
-            onEvent?(.reply(Reply(text: m["text"] as? String ?? "", turnId: m["turnId"] as? String, files: files)))
+            onEvent?(.reply(parseReply(m)))
         case "taken":
             if let id = m["turnId"] as? String { onEvent?(.taken(id)) }
         case "title":
@@ -168,6 +164,33 @@ final class ServerConnection: NSObject, ObservableObject {
             if let id = m["id"] as? String { onEvent?(.snapshotRequest(id)) }
         default: break
         }
+    }
+
+    private func parseReply(_ m: [String: Any]) -> Reply {
+        var files: [ReplyFile] = []
+        for f in (m["files"] as? [[String: Any]]) ?? [] {
+            guard let url = f["url"] as? String else { continue }
+            let kind = f["kind"] as? String ?? "image"
+            let name = f["name"] as? String ?? "file"
+            if url.hasPrefix("data:image/svg+xml;base64,"), let d = Data(base64Encoded: String(url.dropFirst("data:image/svg+xml;base64,".count))) {
+                files.append(ReplyFile(kind: "sketch", name: name, svg: String(data: d, encoding: .utf8), remoteURL: nil, layer: false))
+            } else if url.hasPrefix("/"), let base = baseURL {
+                files.append(ReplyFile(kind: kind, name: name, svg: nil, remoteURL: withToken(base.appendingPathComponent(url)), layer: f["layer"] as? Bool ?? false))
+            }
+        }
+        return Reply(id: m["id"] as? String ?? UUID().uuidString, ts: (m["ts"] as? Double ?? 0) / 1000,
+                     text: m["text"] as? String ?? "", turnId: m["turnId"] as? String, files: files)
+    }
+
+    /// Replies the server broadcast while this iPad was not connected.
+    func missedReplies(since: Double) async -> [Reply] {
+        guard let base = baseURL else { return [] }
+        guard var c = URLComponents(url: withToken(base.appendingPathComponent("replies")), resolvingAgainstBaseURL: false) else { return [] }
+        let existing = c.queryItems ?? []
+        c.queryItems = existing + [URLQueryItem(name: "since", value: String(Int(since * 1000)))]
+        guard let url = c.url, let (data, _) = try? await session.data(from: url),
+              let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return rows.map(parseReply)
     }
 
     // MARK: Bonjour

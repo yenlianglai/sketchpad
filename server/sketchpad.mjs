@@ -46,12 +46,37 @@ export function createSketchpad({ log, broadcast, clientCount, inboxDir, outboxD
     if (rec) { rec.replies.push(reply); saveManifest() }
   }
 
+  /// Replies newer than `sinceMs`, oldest first — so an iPad that was asleep or offline can pick up
+  /// what it missed instead of losing it.
+  function recentReplies(sinceMs = 0, limit = 30) {
+    const out = []
+    for (const t of manifest) for (const r of t.replies) if ((r.ts ?? 0) > sinceMs) out.push({ ...r, turnId: r.turnId ?? t.turnId })
+    out.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
+    return out.slice(-limit)
+  }
+
+  // "Is an agent actually in the loop?" — true while someone is blocked in wait_for_turn, and for a
+  // grace period after, so the gap between two polls doesn't flicker the iPad's status light.
+  const LISTEN_GRACE_MS = 90_000
+  let lastWaitAt = 0
+  let listening = false
+  let graceTimer = null
+  function updateListening() {
+    clearTimeout(graceTimer)
+    const active = waiters.length > 0 || Date.now() - lastWaitAt < LISTEN_GRACE_MS
+    if (active !== listening) { listening = active; broadcast({ type: 'agents', listening }) }
+    if (active && waiters.length === 0) graceTimer = setTimeout(updateListening, Math.max(1000, LISTEN_GRACE_MS - (Date.now() - lastWaitAt) + 500))
+  }
+
   function takeTurn(timeoutMs) {
-    if (queue.length) return Promise.resolve(queue.shift())
+    lastWaitAt = Date.now()
+    if (queue.length) { updateListening(); return Promise.resolve(queue.shift()) }
     return new Promise(resolve => {
-      const timer = setTimeout(() => { const i = waiters.indexOf(wake); if (i >= 0) waiters.splice(i, 1); resolve(null) }, timeoutMs)
-      const wake = () => { clearTimeout(timer); resolve(queue.shift() ?? null) }
+      const done = value => { const i = waiters.indexOf(wake); if (i >= 0) waiters.splice(i, 1); lastWaitAt = Date.now(); updateListening(); resolve(value) }
+      const timer = setTimeout(() => done(null), timeoutMs)
+      const wake = () => { clearTimeout(timer); done(queue.shift() ?? null) }
       waiters.push(wake)
+      updateListening()
     })
   }
 
@@ -174,7 +199,7 @@ export function createSketchpad({ log, broadcast, clientCount, inboxDir, outboxD
             if (a.image_path) files.push({ ...publishFile(String(a.image_path)), kind: a.kind || 'image', layer: a.place_as_layer === true })
             const reply = { type: 'reply', id: randomUUID(), text: String(a.text ?? ''), files, turnId: a.turn_id ?? lastTurn?.turnId, ts: Date.now() }
             broadcast(reply)
-            recordReply(reply.turnId, { text: reply.text, files: files.map(f => ({ name: f.name, kind: f.kind, url: f.url.startsWith('data:') ? '(inline svg)' : f.url })), ts: reply.ts })
+            recordReply(reply.turnId, { id: reply.id, turnId: reply.turnId, text: reply.text, files, ts: reply.ts })
             return { content: [{ type: 'text', text: clientCount() ? 'shown' : 'shown (no iPad connected right now)' }] }
           }
           case 'sketchpad_list_turns': {
@@ -210,5 +235,5 @@ export function createSketchpad({ log, broadcast, clientCount, inboxDir, outboxD
     return server
   }
 
-  return { pushTurn, resolveSnapshot, buildServer, pending: () => queue.length }
+  return { pushTurn, resolveSnapshot, buildServer, recentReplies, pending: () => queue.length, isListening: () => listening }
 }
