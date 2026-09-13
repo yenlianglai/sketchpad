@@ -80,6 +80,8 @@ The suites are deliberately different shapes:
 - `test/tls.test.mjs` — the certificate, and that its fingerprint is never handed out.
 - `test/platform.test.mjs` — the paths that differ per platform, checked against a stand-in home,
   since the suite only ever runs on one platform at a time.
+- `test/readme.test.mjs` — the README against the thing it describes: every command it gives, every
+  tool it lists, every variable and link. Documentation drifts silently; this is what catches it.
 - `test/autostart.test.mjs` — the login-item plan for all three platforms, without installing one.
   On a Mac it also lints the plist with `plutil`.
 - `ios/SketchpadTests` — the two pure functions that fail silently when they are wrong: the
