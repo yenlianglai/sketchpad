@@ -32,7 +32,15 @@ struct ContentView: View {
             CanvasView(drawing: $drawing, controller: canvasController, pencilOnly: settings.pencilOnly, paper: settings.paper,
                        layers: store.current.layers, layerImage: { store.image(named: $0.file, in: store.layersDir) },
                        onStrokesChanged: strokesChanged,
-                       onPencilDoubleTap: settings.pencilDoubleTapSends ? { Task { await send() } } : nil)
+                       onPencilDoubleTap: settings.pencilDoubleTapSends ? { Task { await send() } } : nil,
+                       onLayerLongPress: { id in
+                           // A stroke may have started under the press; drop it if it is a fresh dot.
+                           if let last = drawing.strokes.last, last.path.count <= 3, drawing.strokes.count > store.current.sentStrokeCount {
+                               drawing = PKDrawing(strokes: drawing.strokes.dropLast()); strokesChanged()
+                           }
+                           setLayerMode(true); selectedLayerID = id
+                           showFlash("Layer grabbed — drag to move, pinch to resize")
+                       })
                 .ignoresSafeArea()
 
             if layerMode {
@@ -64,9 +72,11 @@ struct ContentView: View {
             .offset(x: chromeHidden ? rightInset : 0)
 
             if chromeHidden {
+                // Handle to bring the rail back by hand; a big enough target for a finger or a Pencil.
                 Button { canvasController.isDrawing = false } label: {
-                    RoundedRectangle(cornerRadius: 2).fill(Color(white: 0.78)).frame(width: 3, height: 22)
-                        .frame(width: 14, height: 56).background(.thinMaterial, in: UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10))
+                    Image(systemName: "chevron.left").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                        .frame(width: 24, height: 72).background(.regularMaterial, in: UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12))
+                        .overlay(UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12).stroke(.black.opacity(0.06)))
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
@@ -139,7 +149,7 @@ struct ContentView: View {
     }
 
     private func chromeButton(_ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).font(.body.weight(.medium)).frame(width: 44, height: 44).background(.thinMaterial, in: Circle()) }
+        Button(action: { canvasController.isDrawing = false; action() }) { Image(systemName: symbol).font(.body.weight(.medium)).frame(width: 44, height: 44).background(.thinMaterial, in: Circle()) }
             .buttonStyle(.plain).foregroundStyle(.primary)
     }
 
@@ -175,6 +185,7 @@ struct ContentView: View {
     }
 
     private func toggleDrawer(_ t: DrawerTab) {
+        canvasController.isDrawing = false
         if showDrawer && tab == t { showDrawer = false } else { tab = t; showDrawer = true }
         if t == .turns { unread = 0 }
     }

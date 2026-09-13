@@ -14,7 +14,13 @@ final class CanvasController: ObservableObject {
     func undo() { canvas?.undoManager?.undo() }
     func redo() { canvas?.undoManager?.redo() }
 
-    func penDown() { idleTask?.cancel(); if !isDrawing { isDrawing = true } }
+    /// Pen down hides the chrome. The matching pen-up can get lost when a Pencil tap lands on a
+    /// button that overlaps the canvas, so every pen-down also arms a fallback that restores the
+    /// chrome a few seconds later; drawing changes and pen-up shorten that to one second.
+    func penDown() {
+        if !isDrawing { isDrawing = true }
+        penUp(after: 4.0)
+    }
     func penUp(after seconds: Double = 1.0) {
         idleTask?.cancel()
         idleTask = Task { @MainActor in
@@ -64,6 +70,8 @@ struct CanvasView: UIViewRepresentable {
     var layerImage: (Layer) -> UIImage?
     var onStrokesChanged: () -> Void
     var onPencilDoubleTap: (() -> Void)?
+    /// Long-pressing a layer (finger or Pencil) while drawing: hand the layer id back so the app can enter layer mode.
+    var onLayerLongPress: ((UUID) -> Void)?
 
     static let contentSize = CGSize(width: 4000, height: 6000)
 
@@ -103,6 +111,15 @@ struct CanvasView: UIViewRepresentable {
         interaction.delegate = context.coordinator
         canvas.addInteraction(interaction)
 
+        // Long-press on a layer → layer mode. Only begins when the touch lands on a layer, so
+        // ordinary drawing is untouched; when it fires it cancels the in-progress stroke.
+        let press = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.longPress(_:)))
+        press.minimumPressDuration = 0.45
+        press.allowableMovement = 10
+        press.cancelsTouchesInView = true
+        press.delegate = context.coordinator
+        canvas.addGestureRecognizer(press)
+
         controller.canvas = canvas
         controller.layerHost = host
         controller.toolPicker.addObserver(canvas)
@@ -130,17 +147,36 @@ struct CanvasView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    final class Coordinator: NSObject, PKCanvasViewDelegate, UIPencilInteractionDelegate {
+    final class Coordinator: NSObject, PKCanvasViewDelegate, UIPencilInteractionDelegate, UIGestureRecognizerDelegate {
         var parent: CanvasView
         var updatingFromCanvas = false
         weak var canvas: PKCanvasView?
         weak var host: LayerHostView?
         init(_ parent: CanvasView) { self.parent = parent }
 
+        private func layer(at viewPoint: CGPoint) -> Layer? {
+            guard let canvas else { return nil }
+            let p = CGPoint(x: (viewPoint.x + canvas.contentOffset.x) / canvas.zoomScale, y: (viewPoint.y + canvas.contentOffset.y) / canvas.zoomScale)
+            return parent.layers.reversed().first { $0.frame.insetBy(dx: -6, dy: -6).contains(p) }
+        }
+
+        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            guard g is UILongPressGestureRecognizer, let canvas, parent.onLayerLongPress != nil else { return true }
+            return layer(at: g.location(in: canvas)) != nil
+        }
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+        @objc func longPress(_ g: UILongPressGestureRecognizer) {
+            guard g.state == .began, let canvas, let l = layer(at: g.location(in: canvas)) else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            parent.onLayerLongPress?(l.id)
+        }
+
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             updatingFromCanvas = true
             parent.drawing = canvasView.drawing
             parent.onStrokesChanged()
+            parent.controller.penUp()
             DispatchQueue.main.async { self.updatingFromCanvas = false }
         }
         func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) { parent.controller.penDown() }
