@@ -1,9 +1,9 @@
 ios/
+docs/
 inbox/
 outbox/
-certs/
-evals/
+dist/
 scripts/fixtures/
+scripts/test-*.mjs
 .git/
 *.log
-web/

@@ -1,19 +1,16 @@
 {
   "name": "sketchpad",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.3.0",
+  "private": false,
   "type": "module",
-  "description": "iPad sketch + voice channel that pushes turns into a running Claude Code session",
+  "description": "An iPad handwriting pad your coding agent can see, answer, and draw on.",
   "scripts": {
-    "server": "node server/channel.mjs",
-    "headless": "node server/channel.mjs --driver=headless",
-    "web-only": "node server/channel.mjs --driver=none",
-    "test:mcp": "node scripts/test-mcp-client.mjs",
-    "test:sketchpad": "node scripts/test-sketchpad-mcp.mjs",
-    "cert": "sh scripts/gen-cert.sh",
-    "mcp": "node server/mcp-stdio.mjs",
-    "test:stdio": "node scripts/test-stdio-wrapper.mjs",
-    "register": "node scripts/register.mjs"
+    "start": "node server/index.mjs",
+    "register": "node scripts/register.mjs",
+    "bundle": "npx -y @anthropic-ai/mcpb pack . dist/sketchpad.mcpb",
+    "test": "node scripts/test-mcp.mjs && node scripts/test-stdio.mjs",
+    "test:mcp": "node scripts/test-mcp.mjs",
+    "test:stdio": "node scripts/test-stdio.mjs"
   },
   "engines": {
     "node": ">=22.12"
@@ -26,5 +23,28 @@
   },
   "bin": {
     "sketchpad-mcp": "./server/mcp-stdio.mjs"
-  }
+  },
+  "keywords": [
+    "mcp",
+    "ipad",
+    "apple-pencil",
+    "drawing",
+    "canvas",
+    "whiteboard",
+    "agent",
+    "claude"
+  ],
+  "author": "Ryan Lai",
+  "license": "MIT",
+  "homepage": "https://github.com/ryanlai/sketchpad",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ryanlai/sketchpad.git"
+  },
+  "files": [
+    "server/",
+    "scripts/register.mjs",
+    "README.md",
+    "LICENSE"
+  ]
 }

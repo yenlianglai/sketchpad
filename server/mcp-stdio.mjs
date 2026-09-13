@@ -44,7 +44,7 @@ async function ensureServer() {
 
   log('no sketchpad running — starting one')
   const out = openSync(join(ROOT, '.sketchpad-server.log'), 'a')
-  const child = spawn(process.execPath, [join(HERE, 'channel.mjs'), '--driver=none'], {
+  const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
     cwd: ROOT, detached: true, stdio: ['ignore', out, out]
   })
   child.unref()

@@ -2,11 +2,20 @@
   "name": "sketchpad",
   "displayName": "Sketchpad",
   "version": "0.3.0",
-  "description": "Draw on an iPad with an Apple Pencil and have your agent see it, answer, and draw back.",
-  "author": { "name": "Ryan Lai" },
+  "description": "Draw on an iPad. Your coding agent sees the page, answers, and draws back.",
+  "author": {
+    "name": "Ryan Lai"
+  },
   "repository": "https://github.com/ryanlai/sketchpad",
   "license": "MIT",
-  "keywords": ["ipad", "apple-pencil", "drawing", "canvas", "whiteboard", "mcp"],
+  "keywords": [
+    "ipad",
+    "apple-pencil",
+    "drawing",
+    "canvas",
+    "whiteboard",
+    "mcp"
+  ],
   "skills": "./.claude/skills/",
   "mcpServers": "./plugin-mcp.json"
 }

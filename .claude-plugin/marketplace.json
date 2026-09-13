@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "sketchpad",
-      "description": "Draw on an iPad with an Apple Pencil and have your agent see it, answer, and draw back.",
+      "description": "Draw on an iPad. Your coding agent sees the page, answers, and draws back.",
       "version": "0.3.0",
       "source": "./"
     }

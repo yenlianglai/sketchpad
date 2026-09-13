@@ -4,7 +4,7 @@
     {
       "name": "sketch-standalone",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server/channel.mjs", "--driver=none"],
+      "runtimeArgs": ["server/index.mjs", ""],
       "port": 8790
     }
   ]

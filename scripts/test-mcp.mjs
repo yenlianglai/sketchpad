@@ -8,7 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 const PORT = 8794
-const server = spawn('node', ['server/channel.mjs', '--driver=none'], { env: { ...process.env, SKETCH_PORT: String(PORT), SKETCH_NO_TLS: '1' }, stdio: ['ignore', 'ignore', 'inherit'] })
+const server = spawn('node', ['server/index.mjs'], { env: { ...process.env, SKETCHPAD_PORT: String(PORT) }, stdio: ['ignore', 'ignore', 'inherit'] })
 const stop = code => { server.kill('SIGINT'); setTimeout(() => process.exit(code), 500) }
 await new Promise(r => setTimeout(r, 800))
 
@@ -19,7 +19,7 @@ ws.on('message', d => wsMsgs.push(JSON.parse(d.toString())))
 await new Promise(r => ws.on('open', r))
 
 const client = new Client({ name: 'test-agent', version: '0' })
-await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${PORT + 1}/mcp`)))
+await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${PORT}/mcp`)))
 const tools = (await client.listTools()).tools.map(t => t.name)
 console.log('tools:', tools)
 if (!tools.includes('sketchpad_wait_for_turn')) { console.error('missing tool'); stop(1) }
