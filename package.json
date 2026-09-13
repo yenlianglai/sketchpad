@@ -36,10 +36,10 @@
   ],
   "author": "Ryan Lai",
   "license": "MIT",
-  "homepage": "https://github.com/ryanlai/sketchpad",
+  "homepage": "https://github.com/yenlianglai/sketchpad",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ryanlai/sketchpad.git"
+    "url": "https://github.com/yenlianglai/sketchpad.git"
   },
   "files": [
     "server/",

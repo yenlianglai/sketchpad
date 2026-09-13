@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="CI" src="https://github.com/ryanlai/sketchpad/actions/workflows/ci.yml/badge.svg">
+  <img alt="CI" src="https://github.com/yenlianglai/sketchpad/actions/workflows/ci.yml/badge.svg">
   <img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-server-5A45FF">
   <img alt="iPadOS 17+" src="https://img.shields.io/badge/iPadOS-17%2B-black">
@@ -35,7 +35,7 @@ whatever you already use.
 **1. Start the server.** It prints a pairing QR code and listens on port 8791.
 
 ```bash
-git clone https://github.com/ryanlai/sketchpad.git
+git clone https://github.com/yenlianglai/sketchpad.git
 cd sketchpad && npm install && npm start
 ```
 
