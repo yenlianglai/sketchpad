@@ -351,7 +351,9 @@ struct ContentView: View {
     /// Put an agent image onto the canvas as a layer, sized to fit the visible area, below the drawing when possible.
     private func placeLayer(turn: Turn, item: AgentItem) {
         guard let file = item.file, let img = store.image(named: file, in: store.agentDir) else { showFlash("Image not downloaded yet"); return }
-        let visible = canvasController.visibleCanvasRect
+        // The canvas runs under the rail/drawer; only the uncovered part counts as visible.
+        var visible = canvasController.visibleCanvasRect
+        visible.size.width = max(200, visible.width - rightInset / canvasController.zoom)
         let maxW = visible.width * 0.6, maxH = visible.height * 0.6
         var w = img.size.width / 2, h = img.size.height / 2
         let k = min(1, min(maxW / w, maxH / h)); w *= k; h *= k
