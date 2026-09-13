@@ -10,7 +10,9 @@
     "bundle": "npx -y @anthropic-ai/mcpb pack . dist/sketchpad.mcpb",
     "test": "node --test test/*.test.mjs",
     "test:ios": "cd ios && xcodegen generate && DEVELOPER_DIR=${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer} xcodebuild test -project Sketchpad.xcodeproj -scheme Sketchpad -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)' -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet",
-    "app": "cd ios && xcodegen generate && open Sketchpad.xcodeproj"
+    "app": "cd ios && xcodegen generate && open Sketchpad.xcodeproj",
+    "setup": "node scripts/cli.mjs install",
+    "status": "node scripts/cli.mjs status"
   },
   "engines": {
     "node": ">=22.12"
@@ -23,7 +25,8 @@
     "zod": "^4.6.2"
   },
   "bin": {
-    "sketchpad-mcp": "./server/mcp-stdio.mjs"
+    "sketchpad": "scripts/cli.mjs",
+    "sketchpad-mcp": "server/mcp-stdio.mjs"
   },
   "keywords": [
     "mcp",
@@ -44,8 +47,8 @@
   },
   "files": [
     "server/",
-    "scripts/register.mjs",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "scripts/"
   ]
 }

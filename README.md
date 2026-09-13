@@ -36,12 +36,15 @@ git clone https://github.com/yenlianglai/sketchpad.git
 cd sketchpad && npm install && npm start
 ```
 
-**2. Connect your agent.** This finds the MCP clients on your machine and writes each one's config,
-merged and backed up. No paths to type.
+**2. Connect your agent, and keep it running.** This finds the MCP clients on your machine and
+writes each one's config — merged and backed up — then sets the server to start when you log in.
+No paths to type, and no terminal after this.
 
 ```bash
-npm run register -- --write
+npm run setup
 ```
+
+`npm run status` says what is running, registered and enabled. To undo it: `node scripts/cli.mjs uninstall`.
 
 <details>
 <summary>Or install it yourself</summary>

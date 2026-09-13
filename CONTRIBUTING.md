@@ -18,6 +18,8 @@ ios/
   Sketchpad/        the app
   SketchpadTests/   unit tests
 scripts/
+  cli.mjs           the `sketchpad` command: install, uninstall, status, pair
+  autostart.mjs     what "start at login" means on each platform
   register.mjs      writes MCP client configs
   clients.mjs       where each MCP client keeps its config, per platform
 test/                  server tests
@@ -68,6 +70,8 @@ The suites are deliberately different shapes:
 - `test/auth.test.mjs` — who gets in. Every case here was once allowed.
 - `test/platform.test.mjs` — the paths that differ per platform, checked against a stand-in home,
   since the suite only ever runs on one platform at a time.
+- `test/autostart.test.mjs` — the login-item plan for all three platforms, without installing one.
+  On a Mac it also lints the plist with `plutil`.
 - `ios/SketchpadTests` — the two pure functions that fail silently when they are wrong: the
   SVG-to-strokes parser and the pairing-QR parser.
 

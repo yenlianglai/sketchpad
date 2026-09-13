@@ -28,7 +28,7 @@ export function printPairing({ host, port, token, tokenSource }) {
   qrcode.generate(url, { small: true }, q => out(q.split('\n').map(l => '  ' + l).join('\n')))
   out(`  ${url}`)
   out('')
-  out('  Agent   npm run register -- --write')
+  out('  Agent   sketchpad install')
   out('')
   // The QR carries the token, so the only thing worth saying is whether there is one.
   out(token

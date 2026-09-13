@@ -38,6 +38,12 @@ state.prune()
 // An iPad that connects mid-session should see the current state, not a blank one.
 hub.onGreeting(() => ({ type: 'hello', listening: state.isListening() }))
 
+// `sketchpad pair` wants the QR without a second server fighting for the port.
+if (process.env.SKETCHPAD_PAIR_ONLY === '1') {
+  printPairing({ host: HOST, port: PORT, token: TOKEN, tokenSource: TOKEN_SOURCE })
+  process.exit(0)
+}
+
 const authorize = makeAuthorizer({ token: TOKEN, allowRemoteMCP: process.env.SKETCHPAD_MCP_REMOTE === '1' })
 const server = createServer(createRoutes({
   state, hub,
