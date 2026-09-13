@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { autostartPlan, LABEL } from '../scripts/autostart.mjs'
@@ -145,5 +145,15 @@ describe('telling whether it is really set to start', () => {
 
   test('Windows has nothing to ask, because the file is the mechanism', () => {
     assert.equal(forPlatform('win32').check, null)
+  })
+})
+
+describe('after install', () => {
+  test('the server is running whichever mechanism was used', async () => {
+    // launchd and systemd start it as a side effect of being enabled; the Windows Startup folder
+    // only acts at the next login. Somebody who just ran `install` asked for it now, either way.
+    const cli = readFileSync(new URL('../scripts/cli.mjs', import.meta.url), 'utf8')
+    assert.match(cli, /startIfNeeded/, 'install should make sure it is actually up')
+    assert.ok(forPlatform('win32').enable.length === 0, 'this is the platform that needs it')
   })
 })

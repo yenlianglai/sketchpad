@@ -10,7 +10,7 @@
 // Nothing here needs a terminal after the first run — that is the point of `install`.
 
 import { spawn, execFileSync } from 'node:child_process'
-import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
+import { writeFileSync, mkdirSync, rmSync, existsSync, openSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +19,7 @@ import { configHome } from '../server/paths.mjs'
 import { loadOrCreateToken } from '../server/auth.mjs'
 import { localFetch, localURL } from '../server/local-fetch.mjs'
 import { pairingBanner } from '../server/pairing.mjs'
+import { spoolDir, serverLogPath } from '../server/paths.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const ENTRY = join(ROOT, 'server', 'index.mjs')
@@ -62,7 +63,7 @@ const running = () => ask('/health')
 
 async function install() {
   say('Registering MCP clients…')
-  spawn(process.execPath, [REGISTER, '--write'], { stdio: 'inherit' }).on('exit', () => {
+  spawn(process.execPath, [REGISTER, '--write'], { stdio: 'inherit' }).on('exit', async () => {
     const p = plan()
     say(`\nStarting at login (${p.kind})…`)
     mkdirSync(dirname(p.path), { recursive: true })
@@ -70,9 +71,27 @@ async function install() {
     say(`   ${p.path}`)
     const ok = p.enable.every(run)
     say(ok ? '   enabled' : '   written, but the system did not take it — see above')
-    say('\nDone. Open Sketchpad on your iPad; it will find this computer.')
-    say('Run `sketchpad pair` if you need the QR code.')
+
+    // Some mechanisms start it as a side effect of being enabled and some only act at next login.
+    // Either way you asked for it now, so make sure it is actually up.
+    const up = await startIfNeeded()
+    say(up ? '   running' : '   could not start it — try `sketchpad start` to see why')
+
+    say('\nDone. Open Sketchpad on your iPad, then `sketchpad pair` for a code to type in.')
   })
+}
+
+/// Start the server detached if nothing is answering yet. Returns whether it came up.
+async function startIfNeeded() {
+  if (await running()) return true
+  mkdirSync(spoolDir(), { recursive: true })
+  const out = openSync(serverLogPath(), 'a')
+  spawn(process.execPath, [ENTRY], { detached: true, stdio: ['ignore', out, out] }).unref()
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 400))
+    if (await running()) return true
+  }
+  return false
 }
 
 function uninstall() {
@@ -111,6 +130,12 @@ async function status() {
   say(`token         ${loadOrCreateToken().source}`)
   const paired = await ask('/devices')
   if (Array.isArray(paired)) say(`paired        ${paired.length ? paired.map(d => d.name).join(', ') : 'nothing yet'}`)
+
+  const pending = await ask('/pair')
+  if (pending?.code) {
+    const left = Math.round((pending.expiresAt - Date.now()) / 60000)
+    say(`pairing code  ${pending.code} — ${left < 1 ? 'under a minute' : `${left} min`} left`)
+  }
 }
 
 /// A fresh code every time: asking for a code is asking to add one more device, and the previous

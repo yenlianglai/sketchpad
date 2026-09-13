@@ -41,8 +41,8 @@ sketchpad install
 ```
 
 `install` finds the MCP clients on your machine and writes each one's config — merged and backed up
-— then starts the server and keeps it starting when you log in. No paths to type, and no terminal
-after this.
+— then starts the server and sets it to start again when you log in. No paths to type, and no
+terminal after this.
 
 <details>
 <summary>Other ways in</summary>
@@ -52,7 +52,7 @@ after this.
 | Claude Desktop | download `sketchpad.mcpb` from [Releases](https://github.com/yenlianglai/sketchpad/releases) and drag it into Settings |
 | Claude Code | `claude plugin marketplace add yenlianglai/sketchpad` then `claude plugin install sketchpad@sketchpad` — brings the `/sketchpad` skill with it |
 | Cursor · Windsurf · VS Code | `{ "command": "sketchpad-mcp" }` |
-| Anything else with MCP | stdio: `sketchpad-mcp` · or HTTP: `https://localhost:8791/mcp` |
+| Anything else with MCP | stdio: `sketchpad-mcp` — it finds the server and its token by itself |
 
 `sketchpad status` says what is running, registered and enabled. `sketchpad pair` shows a fresh code,
 `sketchpad devices` lists what is paired, `sketchpad revoke <id>` takes one back, and
