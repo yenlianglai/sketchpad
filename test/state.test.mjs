@@ -150,6 +150,12 @@ describe('state', () => {
       assert.ok(existsSync(join(dir, 'files', published.url.replace('/files/', ''))))
     })
 
+    test('a relative path says why, rather than failing as a missing file', () => {
+      // A login item's working directory is wherever launchd or systemd left it, so a path relative
+      // to the agent's own project resolves to nothing useful.
+      assert.throws(() => state.publishFile('outputs/diagrams/flow.png'), /must be absolute/)
+    })
+
     test('a type the iPad cannot show is refused', () => {
       const src = join(dir, 'notes.txt')
       writeFileSync(src, 'hello')

@@ -44,7 +44,7 @@ export const TOOLS = [
       properties: {
         text: { type: 'string', description: 'One or two sentences.' },
         svg: { type: 'string', description: 'Stroke-only SVG in the pixel space of the turn_id image.' },
-        image_path: { type: 'string', description: 'Absolute path of a rendered image (png/jpg/svg/webp/pdf).' },
+        image_path: { type: 'string', description: 'Absolute path of a rendered image (png/jpg/svg/webp/pdf). Must be absolute — this server has its own working directory, not yours.' },
         kind: { type: 'string', enum: ['sketch', 'mermaid', 'drawio', 'image', 'other'], description: 'What image_path is. Shown as a label on the iPad.' },
         place_as_layer: { type: 'boolean', description: 'Suggest putting it straight onto the canvas. The person still decides.' },
         turn_id: { type: 'string', description: 'The turn this replies to. Required for svg coordinates to land correctly.' }

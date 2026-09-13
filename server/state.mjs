@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync, statSync, copyFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs'
-import { join, basename, extname } from 'node:path'
+import { join, basename, extname, isAbsolute } from 'node:path'
 
 /// An agent counts as listening while one is blocked in wait_for_turn, and for a while after, so
 /// the gap between two polls does not flicker the iPad's status light.
@@ -108,6 +108,12 @@ export function createState({ broadcast, clientCount, spoolDir, now = () => Date
 
   /// Copy a file the agent produced into the spool so the iPad can fetch it over /files/.
   function publishFile(path) {
+    // Agents hand over whatever their own renderer returned, and plenty of those return a path
+    // relative to the agent's project. This process was very likely started by a login item, so its
+    // working directory is meaningless — say that, rather than letting it fail as a bare ENOENT.
+    if (!isAbsolute(path)) {
+      throw new Error(`image_path must be absolute, got "${path}" — this server's working directory is not your project's`)
+    }
     const ext = extname(path).toLowerCase()
     if (!PUBLISHABLE.includes(ext)) throw new Error(`unsupported file type ${ext || '(none)'}; use ${PUBLISHABLE.join(' ')}`)
     if (statSync(path).size > MAX_FILE_BYTES) throw new Error(`file too large: ${path}`)
