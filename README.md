@@ -136,4 +136,7 @@ The loop an agent should run is in [`.claude/skills/sketchpad/SKILL.md`](.claude
 This is a side project, used daily by exactly one person. Issues and patches welcome —
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the layout and how to run the tests.
 
+If it saves you some typing, you can [sponsor it](https://github.com/sponsors/ryanlai). It costs
+nothing to run, so that goes on the Apple developer account that keeps the iPad build signed.
+
 MIT
