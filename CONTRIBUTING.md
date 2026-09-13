@@ -40,11 +40,18 @@ own `Documents`. So those tools need the iPad awake, and deleting the cache lose
 
 ## Running it
 
+Working on Sketchpad means running it from the checkout rather than from npm:
+
 ```bash
-npm install
+git clone https://github.com/yenlianglai/sketchpad.git
+cd sketchpad && npm install
 npm start          # server on 8791, prints a pairing code
 npm run app        # generate and open the Xcode project
 ```
+
+A checkout has no `sketchpad` on the PATH, so its commands are `npm run sketchpad -- <command>` —
+or run `npm link` once and they become `sketchpad <command>`, the same as an installed copy. The
+startup banner works out which you have and tells you the right one.
 
 Useful environment variables while developing:
 

@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/sketchpad-mcp"><img alt="npm" src="https://img.shields.io/npm/v/sketchpad-mcp?color=cb3837&label=npm"></a>
   <img alt="CI" src="https://github.com/yenlianglai/sketchpad/actions/workflows/ci.yml/badge.svg">
   <img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-server-5A45FF">
@@ -26,53 +27,52 @@ layer you can draw over and send back.
 
 Sketchpad is an MCP server, so your agent keeps its own session, memory and tools.
 
-**You will need** an iPad with an Apple Pencil, and a Mac with Xcode. There is no App Store build
-yet, so you sign the app yourself.
+**You will need** an iPad with an Apple Pencil, and a Mac with Xcode to build the app onto it.
 
 ---
 
 ## Setup
 
-**1. Start the server.** It listens on port 8791 and prints a pairing code.
+**1. Install the server and connect your agent.**
 
 ```bash
-git clone https://github.com/yenlianglai/sketchpad.git
-cd sketchpad && npm install && npm start
+npm install -g sketchpad-mcp
+sketchpad install
 ```
 
-**2. Connect your agent.** This finds the MCP clients on your machine, writes each one's config —
-merged and backed up — and sets the server to start when you log in. No paths to type.
-
-```bash
-npm run setup
-```
+`install` finds the MCP clients on your machine and writes each one's config — merged and backed up
+— then starts the server and keeps it starting when you log in. No paths to type, and no terminal
+after this.
 
 <details>
-<summary>Other ways in, and the rest of the commands</summary>
+<summary>Other ways in</summary>
 
 | Client | |
 | --- | --- |
-| Claude Code | `claude plugin marketplace add .` then `claude plugin install sketchpad@sketchpad` — brings the `/sketchpad` skill with it |
-| Claude Desktop | `npm run bundle`, then drag `dist/sketchpad.mcpb` into Settings |
-| Cursor · Windsurf · VS Code | `{ "command": "sketchpad-mcp" }` after `npm link` |
+| Claude Desktop | download `sketchpad.mcpb` from [Releases](https://github.com/yenlianglai/sketchpad/releases) and drag it into Settings |
+| Claude Code | `claude plugin marketplace add yenlianglai/sketchpad` then `claude plugin install sketchpad@sketchpad` — brings the `/sketchpad` skill with it |
+| Cursor · Windsurf · VS Code | `{ "command": "sketchpad-mcp" }` |
 | Anything else with MCP | stdio: `sketchpad-mcp` · or HTTP: `https://localhost:8791/mcp` |
 
-`npm run status` says what is running, registered and enabled. `npm run pair` shows a fresh code, and
-`npm run sketchpad -- <command>` covers `devices`, `revoke <id>` and `uninstall`. If you run
-`npm link`, these shorten to `sketchpad status`, `sketchpad pair`, and so on.
+`sketchpad status` says what is running, registered and enabled. `sketchpad pair` shows a fresh code,
+`sketchpad devices` lists what is paired, `sketchpad revoke <id>` takes one back, and
+`sketchpad uninstall` undoes the lot.
 
 </details>
 
-**3. Install the iPad app.** A free Apple ID works; it needs re-signing every seven days.
+**2. Install the iPad app.** There is no App Store build yet, so you build it once yourself. A free
+Apple ID works; it needs re-signing every seven days.
 
 ```bash
+git clone https://github.com/yenlianglai/sketchpad.git
 brew install xcodegen
-cd ios && xcodegen generate && open Sketchpad.xcodeproj
+cd sketchpad/ios && xcodegen generate && open Sketchpad.xcodeproj
 ```
 
-Pick your team under Signing & Capabilities, plug in the iPad, and press Run. Then tap **Pair with a
-code** and type the eight characters your Mac is showing — or ask your agent for a code and skip the
-terminal.
+Pick your team under Signing & Capabilities, plug in the iPad, and press Run.
+
+**3. Pair.** Tap **Pair with a code** and type the eight characters `sketchpad pair` is showing — or
+ask your agent for a code and skip the terminal.
 
 **4. Draw.** Say `/sketchpad` to your agent, or just "listen to the iPad".
 
