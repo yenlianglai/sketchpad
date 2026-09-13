@@ -93,6 +93,30 @@ because a broken one is obvious the moment you look.
 Both suites run on every push. CI also packs the Claude Desktop bundle, so a release never discovers
 a broken manifest.
 
+## Pairing
+
+Worth writing down, because it is the part that looks like security theatre until you see why each
+piece is there.
+
+Nobody can issue a certificate for a laptop on a home network, so the Mac signs its own. What makes
+that safe is the pairing code. The iPad never sends the code: it sends PBKDF2 over the code, salted
+with the fingerprint of the certificate it was just shown. The Mac derives the same thing from its
+own certificate and compares.
+
+That binding is what does the work. Anyone in the middle has to present a certificate of their own,
+so the proof they receive is derived from *their* fingerprint and does not match what the Mac
+expects — and it does not give them the code either. Once the Mac accepts, the iPad pins the
+certificate it paired with and refuses anything else afterwards.
+
+The derivation is 200,000 rounds on both sides. Eight characters is about forty bits; without that
+cost, a proof captured in the middle would give the code up to an offline search in seconds. The
+Swift and Node implementations are pinned to each other by a shared vector in
+`ios/SketchpadTests/PairingTests.swift` — a mismatch there fails silently as "that code did not
+work", which is the least debuggable failure in the project.
+
+A code is good for ten minutes and for one device. Each device gets its own key, so `sketchpad
+revoke <id>` takes one iPad away without touching the others.
+
 ## Changing the agent-facing surface
 
 The tool descriptions in `server/tools.mjs` are the API: an agent behaves according to what they say.

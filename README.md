@@ -133,24 +133,18 @@ The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/sk
 ## Worth knowing
 
 - **The agent looks busy while it listens.** `wait_for_turn` blocks, so that session shows as running
-  a tool. It costs almost nothing in tokens, but you cannot type into that session while it waits.
-  Treat it as a mode you switch on and off.
-- **Your drawings live on the iPad.** The Mac keeps nothing — it passes a page to the agent, then
-  forgets it. That is why looking back at old pages only works while the iPad is awake.
-- **Locked by default.** Only iPads you have paired can connect, each with its own key, and the
-  agent's endpoint is not reachable from the network at all. A pairing code is good for ten minutes
-  and for one device.
-- **Nobody can listen in.** Traffic is TLS. No certificate authority can vouch for a laptop on a home
-  network, so the Mac signs its own — and the code you type is never sent. The iPad sends a proof
-  derived from the code *and the certificate it was shown*. Anyone in the middle necessarily offers a
-  certificate of their own, so the proof they relay does not match the one the Mac expects, and it
-  gives up nothing they could reuse. The iPad pins whatever it paired with.
-- **Works away from home.** Install [Tailscale](https://tailscale.com) on both and your tailnet
-  address is offered alongside the local one; the app tries each, so one pairing covers both. Still
-  no relay of ours — WireGuard, straight between your two machines. Without it, everything stays on
-  the local network.
-- **Sketchpad places diagrams, it does not render them.** Give it a PNG or SVG and it becomes a
-  layer; an agent that wants to send a Mermaid chart needs its own way to turn one into an image.
+  a tool. Almost free in tokens, but you cannot type into it meanwhile — treat it as a mode you
+  switch on and off.
+- **Your drawings live on the iPad.** The Mac forgets a page once it has handed it over, which is why
+  looking back needs the iPad awake.
+- **Locked and encrypted by default.** Only iPads you have paired can connect, each with its own key;
+  the agent's endpoint is not reachable from the network at all; traffic is TLS, pinned at pairing.
+  [How that works](CONTRIBUTING.md#pairing) if you want to check it.
+- **Works away from home.** [Tailscale](https://tailscale.com) on both, and one pairing covers home
+  and away — WireGuard straight between your two machines, no relay of ours. Without it, the local
+  network and nothing else.
+- **It places diagrams, it does not render them.** Hand it a PNG or SVG and it becomes a layer;
+  turning a Mermaid chart into one is the agent's job.
 
 ---
 
