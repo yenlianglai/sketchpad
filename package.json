@@ -1,9 +1,38 @@
 {
   "name": "sketchpad-mcp",
   "version": "0.3.0",
-  "private": false,
-  "type": "module",
   "description": "An iPad handwriting pad your coding agent can see, answer, and draw on.",
+  "keywords": [
+    "mcp",
+    "ipad",
+    "apple-pencil",
+    "drawing",
+    "canvas",
+    "whiteboard",
+    "agent",
+    "claude"
+  ],
+  "homepage": "https://github.com/yenlianglai/sketchpad",
+  "bugs": {
+    "url": "https://github.com/yenlianglai/sketchpad/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yenlianglai/sketchpad.git"
+  },
+  "license": "MIT",
+  "author": "Ryan Lai",
+  "type": "module",
+  "bin": {
+    "sketchpad": "scripts/cli.mjs",
+    "sketchpad-mcp": "server/mcp-stdio.mjs"
+  },
+  "files": [
+    "server/",
+    "README.md",
+    "LICENSE",
+    "scripts/"
+  ],
   "scripts": {
     "start": "node server/index.mjs",
     "register": "node scripts/register.mjs",
@@ -26,31 +55,5 @@
     "ws": "^8.18.0",
     "zod": "^4.6.2"
   },
-  "bin": {
-    "sketchpad": "scripts/cli.mjs",
-    "sketchpad-mcp": "server/mcp-stdio.mjs"
-  },
-  "keywords": [
-    "mcp",
-    "ipad",
-    "apple-pencil",
-    "drawing",
-    "canvas",
-    "whiteboard",
-    "agent",
-    "claude"
-  ],
-  "author": "Ryan Lai",
-  "license": "MIT",
-  "homepage": "https://github.com/yenlianglai/sketchpad",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yenlianglai/sketchpad.git"
-  },
-  "files": [
-    "server/",
-    "README.md",
-    "LICENSE",
-    "scripts/"
-  ]
+  "private": false
 }
