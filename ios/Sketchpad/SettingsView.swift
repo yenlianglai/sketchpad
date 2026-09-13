@@ -45,7 +45,7 @@ struct SettingsView: View {
                 Section {
                     Button { onScan() } label: { Label("Scan QR code to pair", systemImage: "qrcode.viewfinder") }
                     DisclosureGroup("Advanced", isExpanded: $showManual) {
-                        TextField("Address (e.g. 192.168.0.128:8791)", text: $settings.host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        TextField("Address (e.g. 192.168.0.9:8791)", text: $settings.host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                         TextField("Token", text: $settings.token).textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
                 }
