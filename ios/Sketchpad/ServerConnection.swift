@@ -93,29 +93,54 @@ final class ServerConnection: NSObject, ObservableObject {
         session.dataTask(with: req).resume()
     }
 
-    /// Exchange a pairing code for this iPad's own key. The code is good once, so this is the only
-    /// chance to keep what comes back.
-    func redeem(code: String, at host: String, fingerprint: String) async throws -> String {
-        // Pin first: the exchange itself has to be protected, or the key could be handed to someone
-        // standing in the middle of it.
-        pinned.override = fingerprint
-        defer { pinned.override = nil }
-        guard let base = URL(string: "\(fingerprint.isEmpty ? "http" : "https")://\(host)") else {
-            throw NSError(domain: "sketchpad", code: 4, userInfo: [NSLocalizedDescriptionKey: "That address is not valid"])
+    struct Paired { var token: String; var fingerprint: String }
+
+    /// Pair with a Mac using the code shown on its screen.
+    ///
+    /// The code never leaves this device. What goes over the wire is a proof derived from the code
+    /// and the certificate this iPad was just shown — so the Mac can tell whether we are really
+    /// talking to it, and someone in between learns nothing they can use. Which means the
+    /// certificate has to be learned first, before there is any reason to trust it.
+    func pair(code: String, at host: String) async throws -> Paired {
+        guard let secure = URL(string: "https://\(host)"), let plain = URL(string: "http://\(host)") else {
+            throw fail("That address is not valid.")
         }
+
+        pinned.learning = true
+        defer { pinned.learning = false; pinned.learned = nil }
+
+        // Any request completes the handshake; a 401 is fine, we only want the certificate.
+        var base = secure
+        _ = try? await session.data(for: URLRequest(url: secure.appendingPathComponent("health")))
+        if pinned.learned == nil {
+            // No certificate to learn: a server running without TLS. The proof still hides the code,
+            // but there is nothing for it to be bound to.
+            base = plain
+        }
+        let fingerprint = pinned.learned ?? ""
+
+        guard let proof = PairingProof.proof(code: code, fingerprint: fingerprint) else {
+            throw fail("Could not work out the pairing proof on this device.")
+        }
+
         var req = URLRequest(url: base.appendingPathComponent("pair"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["code": code, "name": UIDevice.current.name])
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["proof": proof, "name": UIDevice.current.name])
 
         let (data, resp) = try await session.data(for: req)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200,
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200,
               let token = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["token"] as? String else {
-            throw NSError(domain: "sketchpad", code: 5, userInfo: [
-                NSLocalizedDescriptionKey: "That code did not work — it pairs one iPad once, and only for ten minutes. Run `sketchpad pair` for a new one."
-            ])
+            throw fail(status == 403
+                ? "That code did not work. It pairs one iPad once, within ten minutes — ask for a new one."
+                : "Could not reach Sketchpad on \(host).")
         }
-        return token
+        return Paired(token: token, fingerprint: fingerprint)
+    }
+
+    private func fail(_ message: String) -> NSError {
+        NSError(domain: "sketchpad", code: 5, userInfo: [NSLocalizedDescriptionKey: message])
     }
 
     /// Download an agent file to a local URL.
@@ -291,8 +316,11 @@ extension ServerConnection: NetServiceBrowserDelegate, NetServiceDelegate {
 /// screen is the trusted channel; from then on this refuses any certificate that does not match,
 /// which is what stops someone on the same wifi from sitting in the middle.
 final class PinnedCertificate: NSObject, URLSessionDelegate {
-    /// Used during pairing, before the fingerprint has been saved anywhere.
-    var override: String?
+    /// During pairing there is nothing to compare against yet: accept whatever is offered and
+    /// remember it, so the proof can be bound to it. The Mac is the one that decides whether that
+    /// certificate was really its own — if it was not, pairing fails and nothing is kept.
+    var learning = false
+    var learned: String?
     private let expected: () -> String
 
     init(expected: @escaping () -> String) { self.expected = expected }
@@ -304,14 +332,20 @@ final class PinnedCertificate: NSObject, URLSessionDelegate {
               let trust = challenge.protectionSpace.serverTrust else {
             return completionHandler(.performDefaultHandling, nil)
         }
-        let want = (override ?? expected()).lowercased()
-        guard !want.isEmpty,
-              let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate],
+        guard let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate],
               let leaf = chain.first else {
             return completionHandler(.cancelAuthenticationChallenge, nil)
         }
         let got = SHA256.hash(data: SecCertificateCopyData(leaf) as Data)
             .map { String(format: "%02x", $0) }.joined()
+
+        if learning {
+            learned = got
+            return completionHandler(.useCredential, URLCredential(trust: trust))
+        }
+
+        let want = expected().lowercased()
+        guard !want.isEmpty else { return completionHandler(.cancelAuthenticationChallenge, nil) }
         if got == want {
             completionHandler(.useCredential, URLCredential(trust: trust))
         } else {

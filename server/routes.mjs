@@ -27,7 +27,7 @@ const json = (res, value) => send(res, 200, JSON.stringify(value), 'application/
 
 const stripDataURL = s => s.replace(/^data:image\/png;base64,/, '')
 
-export function createRoutes({ state, hub, devices, authorize, pairingURL, log = () => {} }) {
+export function createRoutes({ state, hub, devices, authorize, pairing, log = () => {} }) {
   /// Stateless Streamable HTTP: a fresh transport and server per request, all sharing one state.
   async function handleMCP(req, res) {
     let body
@@ -35,7 +35,7 @@ export function createRoutes({ state, hub, devices, authorize, pairingURL, log =
       try { body = JSON.parse((await readBody(req)).toString('utf8')) } catch { return send(res, 400, 'invalid json') }
     }
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    const server = buildMcpServer({ state, broadcast: hub.broadcast, clientCount: hub.clientCount, log })
+    const server = buildMcpServer({ state, broadcast: hub.broadcast, clientCount: hub.clientCount, devices, log })
     res.on('close', () => { transport.close(); server.close() })
     await server.connect(transport)
     await transport.handleRequest(req, res, body)
@@ -85,7 +85,8 @@ export function createRoutes({ state, hub, devices, authorize, pairingURL, log =
       // here, so this is the one route that does not need a key — it is how you get one.
       if (req.method === 'POST' && url.pathname === '/pair') {
         const body = JSON.parse((await readBody(req)).toString('utf8'))
-        const paired = devices.redeem(body.code, body.name)
+        // The proof, never the code itself — see devices.mjs.
+        const paired = devices.redeem(body.proof, body.name)
         if (!paired) return send(res, 403, 'that pairing code is wrong, already used, or expired')
         log(`paired "${paired.name}"`)
         return json(res, paired)
@@ -94,8 +95,8 @@ export function createRoutes({ state, hub, devices, authorize, pairingURL, log =
       // `sketchpad pair` asks the running server for a fresh code, rather than minting one in a
       // second process that the server would know nothing about.
       if (url.pathname === '/pair') {
-        const code = url.searchParams.get('new') === '1' ? devices.mintCode().code : devices.pendingCode()
-        return json(res, pairingURL(code))
+        const fresh = url.searchParams.get('new') === '1' ? devices.mintCode() : null
+        return json(res, pairing(fresh?.formatted ?? devices.pendingCode(), fresh?.expiresAt ?? devices.expiresAt()))
       }
 
       if (url.pathname === '/devices') {
@@ -121,7 +122,7 @@ export function createRoutes({ state, hub, devices, authorize, pairingURL, log =
         return send(res, 200, readFileSync(path), MIME[extname(name).toLowerCase()] ?? 'application/octet-stream')
       }
 
-      return send(res, 200, `Sketchpad is running.\n\nMCP endpoint: /mcp\nPair an iPad:  ${pairingURL().url}\n`)
+      return send(res, 200, `Sketchpad is running.\n\nMCP endpoint: /mcp\nPair an iPad:  sketchpad pair\n`)
     } catch (err) {
       log('request failed:', err.message)
       return send(res, 500, err.message)

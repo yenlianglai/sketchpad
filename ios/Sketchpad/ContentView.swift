@@ -13,7 +13,7 @@ struct ContentView: View {
     @State var tab: DrawerTab = .turns
     @State var unread = 0
     @State var showSettings = false
-    @State var showScanner = false
+    @State var showPairing = false
     @State var previewTurn: Turn?
     @State var selectedLayerID: UUID?
     @State var layerMode = false
@@ -47,7 +47,7 @@ struct ContentView: View {
 
     @ViewBuilder var connectionCard: some View {
         if settings.host.isEmpty {
-            ConnectionCard(discovered: conn.discovered, onPick: { settings.host = $0 }, onScan: { showScanner = true }, onManual: { showSettings = true })
+            ConnectionCard(discovered: conn.discovered, onPick: { settings.host = $0 }, onPair: { showPairing = true }, onManual: { showSettings = true })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.trailing, rightInset)
         }
@@ -92,41 +92,9 @@ struct ContentView: View {
             Task { for r in await conn.missedReplies(since: lastReplyTs) { handleReply(r) } }
         }
         .onChange(of: showSettings) { _, shown in if !shown && !layerMode { canvasController.setToolPickerVisible(true) } }
-        .sheet(isPresented: $showSettings) { SettingsView(onScan: { showSettings = false; showScanner = true }).environmentObject(settings).environmentObject(conn) }
-        .sheet(isPresented: $showScanner) {
-            QRScannerSheet { host, credential, fingerprint, alternates in
-                switch credential {
-                case .token(let token):
-                    settings.fingerprint = fingerprint
-                    settings.altHosts = alternates
-                    settings.host = host
-                    settings.token = token
-                    conn.reconnectNow()
-                    showFlash("Paired with \(host)")
-                case .code(let code):
-                    Task {
-                        do {
-                            // Only saved once the exchange has gone through, so a failed pairing
-                            // leaves the working one alone.
-                            let token = try await conn.redeem(code: code, at: host, fingerprint: fingerprint)
-                            settings.fingerprint = fingerprint
-                            settings.altHosts = alternates
-                            settings.host = host
-                            settings.token = token
-                            conn.reconnectNow()
-                            showFlash("Paired with \(host)")
-                        } catch {
-                            showFlash(error.localizedDescription)
-                        }
-                    }
-                case .none:
-                    settings.fingerprint = fingerprint
-                    settings.altHosts = alternates
-                    settings.host = host
-                    conn.reconnectNow()
-                    showFlash("Connecting to \(host)")
-                }
-            }
+        .sheet(isPresented: $showSettings) { SettingsView(onPair: { showSettings = false; showPairing = true }).environmentObject(settings).environmentObject(conn) }
+        .sheet(isPresented: $showPairing) {
+            PairingSheet().environmentObject(settings).environmentObject(conn)
         }
         .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }
     }

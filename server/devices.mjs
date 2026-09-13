@@ -1,23 +1,45 @@
 // The iPads allowed to connect, and how one gets added.
 //
-// Printing the long-lived token straight into the QR meant that anyone who ever saw that terminal —
-// a screenshot, a photo, someone walking past — held the key for good, with no way to take it back
-// short of changing it for every device at once.
+// Pairing is eight characters you read off the screen and type into the iPad. Short-lived, good for
+// one device, spent the moment it is used — so a screenshot taken afterwards is worth nothing, and
+// losing an iPad costs one line in a file rather than a re-pair of everything you own.
 //
-// So the QR carries a pairing code instead: short-lived, good for one device, and spent the moment
-// it is used. The device exchanges it for a key of its own. Losing an iPad now costs you one line
-// in a file rather than a re-pair of everything you own.
+// The code itself never crosses the network. The iPad sends a proof derived from the code *and the
+// certificate it was just shown*, and the server checks it against its own certificate. Someone
+// sitting in the middle presents a certificate of their own, so their proof does not match and the
+// server turns them away — and the proof does not give them the code either. That binding is what
+// lets eight typed characters be as safe as a fingerprint scanned off the screen.
+//
+// The derivation is deliberately slow. Without that, a proof captured in the middle would give up a
+// forty-bit code to an offline search in seconds.
 
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID, pbkdf2Sync } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { sameSecret } from './auth.mjs'
 
-/// Long enough that a code cannot be guessed before it expires, short enough to survive a photo of
-/// a terminal at an angle.
+/// Long enough to type without irritation, short enough that nobody minds reading it out.
 export const CODE_TTL_MS = 10 * 60 * 1000
+const CODE_LENGTH = 8
+/// No I, L, O or U: nothing that can be misread as a digit, or misheard when read aloud.
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+const ITERATIONS = 200_000
 
-export function createDevices({ dir, now = () => Date.now() }) {
+/// What the iPad actually sends. Typed by a person, so case and the grouping dash do not matter.
+export const proofFor = (code, fingerprint = '') =>
+  pbkdf2Sync(normalizeCode(code), `sketchpad-pairing-v1:${fingerprint}`, ITERATIONS, 32, 'sha256')
+    .toString('base64url')
+
+export const normalizeCode = code =>
+  String(code ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '')
+
+/// Shown as XXXX-XXXX. Easier to read back to someone, and easier to keep your place typing it.
+export const formatCode = code =>
+  normalizeCode(code).replace(/^(.{4})(.{4})$/, '$1-$2')
+
+/// `fingerprint` is this server's certificate — what a pairing proof is bound to. Empty when TLS is
+/// off, which leaves the code hidden but with nothing to bind it to.
+export function createDevices({ dir, now = () => Date.now(), fingerprint = () => '' }) {
   const path = join(dir, 'devices.json')
   let devices = read()
   let pending = null      // the one unspent pairing code, if there is one
@@ -35,16 +57,21 @@ export function createDevices({ dir, now = () => Date.now() }) {
     writeFileSync(path, JSON.stringify(devices, null, 1), { mode: 0o600 })
   }
 
-  /// A fresh code, replacing any unspent one — showing a new QR should retire the old.
+  /// A fresh code, replacing any unspent one — showing a new code should retire the old.
   function mintCode() {
-    pending = { code: randomBytes(9).toString('base64url'), expiresAt: now() + CODE_TTL_MS }
-    return { ...pending }
+    const bytes = randomBytes(CODE_LENGTH)
+    const code = Array.from(bytes, b => ALPHABET[b % ALPHABET.length]).join('')
+    pending = { code, expiresAt: now() + CODE_TTL_MS }
+    return { code, formatted: formatCode(code), expiresAt: pending.expiresAt }
   }
 
-  /// Exchange a code for this device's own key. Null if the code is wrong, spent or expired.
-  function redeem(code, name = 'iPad') {
+  /// Exchange a proof of the code for this device's own key. Null if it is wrong, spent or expired.
+  ///
+  /// Takes the proof rather than the code so that neither the network nor anyone standing in the
+  /// middle of it ever sees what was typed.
+  function redeem(proof, name = 'iPad') {
     if (!pending || now() > pending.expiresAt) return null
-    if (!code || !sameSecret(code, pending.code)) return null
+    if (!proof || !sameSecret(proof, proofFor(pending.code, fingerprint()))) return null
     pending = null   // one device per code
 
     const device = {
@@ -84,6 +111,8 @@ export function createDevices({ dir, now = () => Date.now() }) {
     revoke,
     /// Never includes the keys themselves.
     list: () => devices.map(({ token, ...rest }) => rest),
-    pendingCode: () => (pending && now() <= pending.expiresAt ? pending.code : null)
+    /// The code as it should be shown to a person, or null once it is spent or expired.
+    pendingCode: () => (pending && now() <= pending.expiresAt ? formatCode(pending.code) : null),
+    expiresAt: () => (pending && now() <= pending.expiresAt ? pending.expiresAt : null)
   }
 }

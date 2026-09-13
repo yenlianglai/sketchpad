@@ -1,67 +1,60 @@
 import XCTest
 @testable import Sketchpad
 
-/// What a QR code has to survive being turned into. A wrong answer here sends every page to the
-/// wrong machine, or to nowhere.
+/// Pairing is eight characters someone reads off a screen and types in here. What protects it is
+/// that the proof sent to the Mac is derived from the code *and the certificate this iPad was
+/// shown* — so if these numbers stop matching the server's, either nothing pairs at all, or
+/// something pairs that should not have. Both are silent until someone is standing in the middle.
 final class PairingTests: XCTestCase {
-    func testPairingURL() {
-        let r = QRScannerSheet.parse("sketchpad://pair?host=192.168.0.9:8791")
-        XCTAssertEqual(r?.0, "192.168.0.9:8791")
-        XCTAssertNil(r?.1)
+
+    // MARK: what people type
+
+    func testDashIsCosmetic() {
+        XCTAssertEqual(PairingProof.normalize("V4XY-PE72"), "V4XYPE72")
+        XCTAssertEqual(PairingProof.normalize("v4xy pe72"), "V4XYPE72")
+        XCTAssertEqual(PairingProof.normalize("V4XYPE72"), "V4XYPE72")
     }
 
-    func testPairingCode() {
-        let r = QRScannerSheet.parse("sketchpad://pair?host=mac.local:8791&code=abc123")
-        XCTAssertEqual(r?.0, "mac.local:8791")
-        XCTAssertEqual(r?.1, .code("abc123"))
+    func testTypingRegroupsAsYouGo() {
+        XCTAssertEqual(PairingProof.grouped("v4x"), "V4X")
+        XCTAssertEqual(PairingProof.grouped("v4xy"), "V4XY")
+        XCTAssertEqual(PairingProof.grouped("v4xyp"), "V4XY-P")
+        XCTAssertEqual(PairingProof.grouped("v4xype72"), "V4XY-PE72")
     }
 
-    /// A server running without pairing prints its key directly, and older QRs carry one too.
-    func testPairingURLWithToken() {
-        let r = QRScannerSheet.parse("sketchpad://pair?host=mac.local:8791&token=s3cret")
-        XCTAssertEqual(r?.0, "mac.local:8791")
-        XCTAssertEqual(r?.1, .token("s3cret"))
+    func testStopsAtEightCharacters() {
+        XCTAssertEqual(PairingProof.grouped("V4XYPE72EXTRA"), "V4XY-PE72")
     }
 
-    /// A code is exchanged for a key of this device's own, so it is the better of the two.
-    func testCodeWinsOverToken() {
-        let r = QRScannerSheet.parse("sketchpad://pair?host=mac.local:8791&token=s3cret&code=abc123")
-        XCTAssertEqual(r?.1, .code("abc123"))
+    // MARK: the proof
+
+    /// Worked out with the server's own code, so a change on either side shows up here:
+    ///   pbkdf2Sync("V4XYPE72", "sketchpad-pairing-v1:abc123", 200000, 32, "sha256").toString("base64url")
+    func testProofMatchesTheServer() {
+        XCTAssertEqual(
+            PairingProof.proof(code: "V4XY-PE72", fingerprint: "abc123"),
+            "gLaIwfUpXzJRnbWjC5z996e9Xdi4l9IeyGbaOQqFEs4"
+        )
     }
 
-    func testHttpURL() {
-        XCTAssertEqual(QRScannerSheet.parse("http://192.168.0.9:8791/")?.0, "192.168.0.9:8791")
-        XCTAssertEqual(QRScannerSheet.parse("http://mac.local")?.0, "mac.local")
+    func testProofIsBoundToTheCertificate() {
+        // The whole point: the same code against a different certificate is a different proof, which
+        // is what a Mac uses to tell itself apart from someone impersonating it.
+        let real = PairingProof.proof(code: "V4XYPE72", fingerprint: "the-real-certificate")
+        let middle = PairingProof.proof(code: "V4XYPE72", fingerprint: "someone-elses-certificate")
+        XCTAssertNotNil(real)
+        XCTAssertNotEqual(real, middle)
     }
 
-    func testBareHostAndPort() {
-        XCTAssertEqual(QRScannerSheet.parse("192.168.0.9:8791")?.0, "192.168.0.9:8791")
-        XCTAssertEqual(QRScannerSheet.parse("  192.168.0.9:8791\n")?.0, "192.168.0.9:8791")
+    func testProofDoesNotContainTheCode() {
+        let proof = PairingProof.proof(code: "V4XYPE72", fingerprint: "abc123") ?? ""
+        XCTAssertFalse(proof.contains("V4XYPE72"))
+        XCTAssertFalse(proof.lowercased().contains("v4xype72"))
     }
 
-    /// One scan has to cover being at home and being away: the Mac sends every address it answers
-    /// on, and the app tries them in turn.
-    func testAlternateAddresses() {
-        let code = "sketchpad://pair?host=192.168.1.5:8791&alt=100.64.1.9%3A8791%2Cmac.tailnet.ts.net%3A8791"
-        XCTAssertEqual(QRScannerSheet.parse(code)?.0, "192.168.1.5:8791")
-        XCTAssertEqual(QRScannerSheet.alternates(code), ["100.64.1.9:8791", "mac.tailnet.ts.net:8791"])
-    }
-
-    func testNoAlternatesIsEmptyNotNil() {
-        XCTAssertEqual(QRScannerSheet.alternates("sketchpad://pair?host=mac.local:8791"), [])
-    }
-
-    func testFingerprintIsLowercasedForComparison() {
-        XCTAssertEqual(QRScannerSheet.fingerprint("sketchpad://pair?host=x:1&fp=ABCD12"), "abcd12")
-        XCTAssertEqual(QRScannerSheet.fingerprint("sketchpad://pair?host=x:1"), "")
-    }
-
-    func testRejectsAnythingElse() {
-        // Scanning a wifi QR, a URL to a website, or a phone number must not silently repoint the app.
-        XCTAssertNil(QRScannerSheet.parse("WIFI:S:home;T:WPA;P:pw;;"))
-        XCTAssertNil(QRScannerSheet.parse("hello"))
-        XCTAssertNil(QRScannerSheet.parse("192.168.0.9:notaport"))
-        XCTAssertNil(QRScannerSheet.parse("sketchpad://pair"))
-        XCTAssertNil(QRScannerSheet.parse(""))
+    func testDerivationIsSlowEnoughToResistAnOfflineSearch() {
+        // Eight characters is forty bits. Without a deliberately slow derivation, a proof captured
+        // in the middle would give the code up in seconds.
+        XCTAssertGreaterThanOrEqual(PairingProof.iterations, 100_000)
     }
 }

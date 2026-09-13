@@ -65,7 +65,7 @@ describe('over stdio', () => {
   test('it starts the shared server and forwards the tools', async () => {
     const names = (await client.listTools()).tools.map(t => t.name)
     assert.ok(names.includes('sketchpad_wait_for_turn'))
-    assert.equal(names.length, 7)
+    assert.equal(names.length, 8)
   })
 
   test('a call reaches the shared state, not a private copy', async () => {

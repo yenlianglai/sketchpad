@@ -2,7 +2,6 @@
 // own, and a QR in the terminal for networks that block it.
 
 import { networkInterfaces, hostname } from 'node:os'
-import qrcode from 'qrcode-terminal'
 import { Bonjour } from 'bonjour-service'
 
 /// Tailscale hands out addresses from the carrier-grade NAT range, which nothing else on a home
@@ -28,38 +27,39 @@ export function addresses() {
 /// The address an iPad on the same network should use.
 export const lanIP = () => addresses().lan
 
-/// What the QR encodes. A `code` is exchanged for a key of the device's own; a `token` is that key
-/// directly, which is what a server running without pairing (SKETCHPAD_NO_TOKEN) has to fall back on.
-/// What the QR encodes. A `code` is exchanged for a key of the device's own; a `token` is that key
-/// directly, which is what a server running without pairing has to fall back on. `fp` is the
-/// certificate fingerprint the iPad pins — the reason a self-signed certificate is safe here is that
-/// this arrives by a channel nobody on the network can touch.
-export function pairingURL({ host, port, token, code, scheme = 'http', fingerprint, alt = [] }) {
-  const parts = [`host=${host}:${port}`]
-  // Other addresses the same machine answers on — a tailnet address, typically, so one scan works
-  // both at home and away. The app tries them in order.
-  const others = alt.filter(h => h && h !== host).map(h => `${h}:${port}`)
-  if (others.length) parts.push(`alt=${encodeURIComponent(others.join(','))}`)
-  if (code) parts.push(`code=${encodeURIComponent(code)}`)
-  else if (token) parts.push(`token=${encodeURIComponent(token)}`)
-  if (scheme !== 'http') parts.push(`scheme=${scheme}`)
-  if (fingerprint) parts.push(`fp=${fingerprint}`)
+/// What the iPad needs to be told, and what it works out for itself.
+///
+/// Only the code is here. The address it usually finds over Bonjour, and the certificate it learns
+/// during pairing — the proof it sends is bound to whatever certificate it was shown, so a wrong one
+/// is rejected by the server rather than having to be checked up front.
+export function pairing({ host, port, code, expiresAt, alt = [] }) {
   return {
-    host: `${host}:${port}`, token: token || null, code: code || null,
-    alt: others, scheme, fingerprint: fingerprint || null,
-    url: `sketchpad://pair?${parts.join('&')}`
+    host: `${host}:${port}`,
+    alt: alt.filter(h => h && h !== host).map(h => `${h}:${port}`),
+    code: code || null,
+    expiresAt: expiresAt || null
   }
 }
 
 /// Printed to stderr, never stdout: in stdio mode stdout is the MCP transport.
-export function printPairing({ host, port, token, code, scheme, fingerprint, alt = [] }) {
-  const { url } = pairingURL({ host, port, token, code, scheme, fingerprint, alt })
+export function printPairing({ host, port, code, alt = [], token }) {
   const out = s => process.stderr.write(s + '\n')
+  const { host: address, alt: others } = pairing({ host, port, alt })
   out('')
-  out('  iPad    open Sketchpad — it finds this computer on the network. Or scan:')
+  if (code) {
+    out('  iPad    open Sketchpad and type this code:')
+    out('')
+    out(`      ${code}`)
+    out('')
+    out('          good for ten minutes, and for one iPad')
+  } else if (token) {
+    out(`  iPad    open Sketchpad and enter this key:  ${token}`)
+  } else {
+    out('  OPEN    no token: anyone on this network can read your canvas and this machine\'s files.')
+  }
   out('')
-  qrcode.generate(url, { small: true }, q => out(q.split('\n').map(l => '  ' + l).join('\n')))
-  out(`  ${url}`)
+  out(`  Mac     ${address}${others.length ? `  ·  also ${others.join('  ')}` : ''}`)
+  out('          Sketchpad finds this on its own if your network allows it')
   out('')
   out('  Agent   sketchpad install')
   out('')
@@ -67,13 +67,6 @@ export function printPairing({ host, port, token, code, scheme, fingerprint, alt
     out('  Tailnet this code also works away from this network, over Tailscale.')
     out('')
   }
-  // The QR carries the token, so the only thing worth saying is whether there is one.
-  out(code
-    ? `  Locked  this code pairs one iPad, once, within ten minutes.${fingerprint ? ' Encrypted.' : ''}`
-    : token
-      ? '  Locked  only devices holding this key can connect.'
-      : '  OPEN    no token: anyone on this network can read your canvas and this machine\'s files.')
-  out('')
 }
 
 /// Advertise `_sketchpad._tcp` so the app finds this computer without anyone typing an address.

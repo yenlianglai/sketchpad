@@ -65,9 +65,10 @@ brew install xcodegen
 cd ios && xcodegen generate && open Sketchpad.xcodeproj
 ```
 
-Pick your team under Signing & Capabilities, plug in the iPad, Run. Then tap **Scan the QR code** and
-point the camera at the terminal. The code pairs that one iPad, once, and gives it a key of its own —
-`sketchpad devices` lists them, `sketchpad revoke <id>` takes one back.
+Pick your team under Signing & Capabilities, plug in the iPad, Run. Then tap **Pair with a code** and
+type the eight characters your Mac is showing — or just ask your agent for one. It pairs that iPad
+once and gives it a key of its own; `sketchpad devices` lists them, `sketchpad revoke <id>` takes one
+back.
 
 **4. Draw.** Say `/sketchpad` to your agent, or just "listen to the iPad".
 
@@ -115,6 +116,7 @@ With a keyboard: `⌘↩` send, `⌘N` new sheet, `⌘\` panel, `⌘0` fit.
 | `sketchpad_get_canvas` | Snapshot the canvas now, without waiting. |
 | `sketchpad_list_turns` · `sketchpad_get_turn` | Look back at earlier pages. Needs the iPad awake. |
 | `sketchpad_set_title` | Name the sheet from what is on it. |
+| `sketchpad_pairing_code` | A code to read out, so you can connect an iPad without leaving the chat. |
 | `sketchpad_status` | Whether an iPad is connected. |
 
 The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/skills/sketchpad/SKILL.md).
@@ -138,11 +140,12 @@ Three environment variables worth knowing:
 - **Your drawings live on the iPad.** The Mac keeps nothing — it passes a page to the agent, then
   forgets it. That is why looking back at old pages needs the iPad awake.
 - **Locked and encrypted by default.** Only iPads you have paired can connect, each with its own
-  key, and the agent's endpoint is not reachable from the network at all. The QR carries a code that
-  pairs one device once and expires in ten minutes, so a photo of your screen is worth nothing later.
+  key, and the agent's endpoint is not reachable from the network at all. A pairing code is good for
+  ten minutes and for one device, so a screenshot of your screen is worth nothing later.
 - **Nobody can listen in.** Traffic is TLS. There is no certificate authority for a laptop on a home
-  network, so the Mac signs its own and the QR carries its fingerprint — the iPad pins that and
-  refuses anything else, which is what stops someone on the same wifi sitting in the middle.
+  network, so the Mac signs its own — and the code you type is never sent. The iPad sends a proof
+  derived from the code *and the certificate it was shown*, so someone sitting in the middle presents
+  the wrong certificate, fails, and learns nothing. The iPad pins what it paired with.
 - **Works away from home, if you want it to.** Install [Tailscale](https://tailscale.com) on both
   and the QR carries your tailnet address alongside the local one — the app tries each, so one
   pairing covers both. Still no relay of ours: WireGuard, straight between your two machines.

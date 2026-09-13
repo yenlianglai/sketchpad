@@ -9,12 +9,13 @@ import { tmpdir } from 'node:os'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { createState } from '../server/state.mjs'
+import { createDevices } from '../server/devices.mjs'
 import { buildMcpServer, TOOLS } from '../server/tools.mjs'
 
 const RED_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=='
 
 describe('tools', () => {
-  let dir, sent, clients, state, client, server, ipad
+  let dir, sent, clients, state, client, server, ipad, devices
 
   /// Everything the server broadcasts, plus a stand-in iPad that answers what it is asked — the
   /// history lives on the device, so a test that looks back has to have one.
@@ -25,7 +26,8 @@ describe('tools', () => {
 
   async function connect() {
     state = createState({ broadcast, clientCount: () => clients, spoolDir: dir })
-    server = buildMcpServer({ state, broadcast, clientCount: () => clients })
+    devices = createDevices({ dir, fingerprint: () => 'test-certificate' })
+    server = buildMcpServer({ state, broadcast, clientCount: () => clients, devices })
     const [a, b] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test', version: '0' })
     await Promise.all([server.connect(b), client.connect(a)])
@@ -50,7 +52,7 @@ describe('tools', () => {
   test('every documented tool is actually offered', async () => {
     const offered = (await client.listTools()).tools.map(t => t.name).sort()
     assert.deepEqual(offered, TOOLS.map(t => t.name).sort())
-    assert.equal(offered.length, 7)
+    assert.equal(offered.length, 8)
   })
 
   describe('wait_for_turn', () => {
@@ -178,6 +180,19 @@ describe('tools', () => {
     state.pushTurn({ turnId: 'z', boardId: 'B7', ts: Date.now() })
     await call('sketchpad_set_title', { title: 'Onboarding flow' })
     assert.deepEqual(sent.at(-1), { type: 'title', boardId: 'B7', title: 'Onboarding flow' })
+  })
+
+  test('the agent can hand over a pairing code to read out', async () => {
+    const said = textOf(await call('sketchpad_pairing_code'))
+    const code = said.match(/([0-9A-HJ-NP-TV-Z]{4}-[0-9A-HJ-NP-TV-Z]{4})/)?.[1]
+    assert.ok(code, said)
+    assert.equal(devices.pendingCode(), code, 'the code it read out is the one that will work')
+  })
+
+  test('asking for another code retires the one already spoken', async () => {
+    const first = textOf(await call('sketchpad_pairing_code')).match(/([0-9A-HJ-NP-TV-Z]{4}-[0-9A-HJ-NP-TV-Z]{4})/)[1]
+    await call('sketchpad_pairing_code')
+    assert.notEqual(devices.pendingCode(), first)
   })
 
   test('status reports what an agent needs to decide whether to wait', async () => {

@@ -11,7 +11,7 @@ import { createServer as createHttpsServer } from 'node:https'
 import { createHub } from './hub.mjs'
 import { createState } from './state.mjs'
 import { createRoutes } from './routes.mjs'
-import { addresses, advertiseBonjour, lanIP, pairingURL, printPairing } from './pairing.mjs'
+import { addresses, advertiseBonjour, lanIP, pairing, printPairing } from './pairing.mjs'
 import { loadOrCreateToken, makeAuthorizer } from './auth.mjs'
 import { spoolDir, configDir } from './paths.mjs'
 import { createDevices } from './devices.mjs'
@@ -52,12 +52,13 @@ const TLS = process.env.SKETCHPAD_NO_TLS !== '1'
 const tls = TLS ? await loadOrCreateCert({ dir: configDir(), hosts: [HOST, ...ALT] }) : null
 const SCHEME = TLS ? 'https' : 'http'
 
-const devices = createDevices({ dir: configDir() })
+// A pairing proof is bound to this server's certificate, so devices has to know it.
+const devices = createDevices({ dir: configDir(), fingerprint: () => tls?.fingerprint ?? '' })
 const authorize = makeAuthorizer({ token: TOKEN, devices, allowRemoteMCP: process.env.SKETCHPAD_MCP_REMOTE === '1' })
 const handler = createRoutes({
   state, hub, devices,
   authorize,
-  pairingURL: code => pairingURL({ host: HOST, port: PORT, token: TOKEN, code, scheme: SCHEME, fingerprint: tls?.fingerprint, alt: ALT }),
+  pairing: (code, expiresAt) => pairing({ host: HOST, port: PORT, code, expiresAt, alt: ALT }),
   log: QUIET ? () => {} : log
 })
 const server = TLS ? createHttpsServer({ cert: tls.cert, key: tls.key }, handler) : createHttpServer(handler)
@@ -78,8 +79,8 @@ server.listen(PORT, '0.0.0.0', () => {
   // A token that was never paired for (SKETCHPAD_NO_TOKEN, or one set by hand) has no code to mint.
   if (!QUIET) printPairing({
     host: HOST, port: PORT, token: TOKEN,
-    code: TOKEN ? devices.mintCode().code : null,
-    scheme: SCHEME, fingerprint: tls?.fingerprint, alt: ALT
+    code: TOKEN ? devices.mintCode().formatted : null,
+    alt: ALT
   })
   advertiseBonjour({ port: PORT, log })
 })

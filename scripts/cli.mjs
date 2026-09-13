@@ -14,7 +14,6 @@ import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import qrcode from 'qrcode-terminal'
 import { autostartPlan } from './autostart.mjs'
 import { configHome } from '../server/paths.mjs'
 import { loadOrCreateToken } from '../server/auth.mjs'
@@ -100,8 +99,8 @@ async function status() {
   if (Array.isArray(paired)) say(`paired        ${paired.length ? paired.map(d => d.name).join(', ') : 'nothing yet'}`)
 }
 
-/// A fresh code every time: showing a QR is asking for one more device, and the old code should
-/// stop working the moment a new one is on screen.
+/// A fresh code every time: asking for a code is asking to add one more device, and the previous
+/// one should stop working the moment a new one is on screen.
 async function pair() {
   const info = await ask('/pair?new=1')
   if (!info) {
@@ -110,9 +109,11 @@ async function pair() {
     return
   }
   say('')
-  qrcode.generate(info.url, { small: true }, q => say(q.split('\n').map(l => '  ' + l).join('\n')))
-  say(`  ${info.url}`)
-  say(info.code ? '\n  Pairs one iPad, once, within ten minutes.' : '')
+  say(`  Type this into Sketchpad on your iPad:\n`)
+  say(`      ${info.code}\n`)
+  say('      good for ten minutes, and for one iPad')
+  say(`\n  This Mac is ${info.host}${info.alt.length ? ` (also ${info.alt.join(', ')})` : ''} —`)
+  say('  the app usually finds that on its own.\n')
 }
 
 async function devices() {

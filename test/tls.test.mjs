@@ -11,7 +11,7 @@ import { X509Certificate } from 'node:crypto'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { loadOrCreateCert, fingerprint } from '../server/tls.mjs'
-import { pairingURL } from '../server/pairing.mjs'
+import { pairing } from '../server/pairing.mjs'
 
 describe('the certificate', () => {
   let dir
@@ -70,50 +70,24 @@ describe('the fingerprint', () => {
     assert.match(fp, /^[0-9a-f]{64}$/, 'lowercase hex, no colons — the app compares it as a string')
   })
 
-  test('is what the QR carries, and it matches the certificate being served', async () => {
-    const { cert, fingerprint: fp } = await loadOrCreateCert({ dir, hosts: ['192.168.1.5'] })
-    const { url } = pairingURL({ host: '192.168.1.5', port: 8791, code: 'abc', scheme: 'https', fingerprint: fp })
-    const carried = new URL(url.replace('sketchpad://', 'https://')).searchParams.get('fp')
-    assert.equal(carried, fingerprint(cert))
-  })
-
-  test('is left out when there is no TLS, so the app knows to use plain http', () => {
-    const { url, scheme } = pairingURL({ host: '192.168.1.5', port: 8791, code: 'abc' })
-    assert.equal(scheme, 'http')
-    assert.ok(!url.includes('fp='), url)
-    assert.ok(!url.includes('scheme='), url)
-  })
-
-  test('a pairing code is still preferred over a raw key when both could be sent', () => {
-    const { url } = pairingURL({ host: 'x:1', port: 8791, token: 'key', code: 'code', scheme: 'https', fingerprint: 'ab' })
-    assert.ok(url.includes('code=code'))
-    assert.ok(!url.includes('token='), 'the long-lived key should never be printed when a code will do')
+  test('is never sent to the iPad, because it is what pairing proves', async () => {
+    // The iPad learns the certificate from the handshake and binds its proof to it. Handing the
+    // fingerprint over in the clear would make it something an attacker could simply repeat.
+    const { fingerprint: fp } = await loadOrCreateCert({ dir, hosts: ['192.168.1.5'] })
+    const info = pairing({ host: '192.168.1.5', port: 8791, code: 'V4XY-PE72' })
+    assert.equal(JSON.stringify(info).includes(fp), false)
   })
 })
 
-describe('reaching the Mac from somewhere else', () => {
-  test('the tailnet address travels in the QR alongside the local one', () => {
-    const { url, alt } = pairingURL({
-      host: '192.168.1.5', port: 8791, code: 'abc', scheme: 'https', fingerprint: 'ab',
-      alt: ['100.64.1.9']
-    })
-    assert.deepEqual(alt, ['100.64.1.9:8791'])
-    assert.ok(url.includes('alt=100.64.1.9%3A8791'), url)
+describe('what the iPad is told', () => {
+  test('is the code and where to find the Mac, and nothing secret', () => {
+    const info = pairing({ host: '192.168.1.5', port: 8791, code: 'V4XY-PE72', expiresAt: 123 })
+    assert.deepEqual(Object.keys(info).sort(), ['alt', 'code', 'expiresAt', 'host'])
+    assert.equal(info.host, '192.168.1.5:8791')
   })
 
-  test('the local address stays first, because at home it is the direct one', () => {
-    const { host, alt } = pairingURL({ host: '192.168.1.5', port: 8791, alt: ['100.64.1.9'] })
-    assert.equal(host, '192.168.1.5:8791')
-    assert.deepEqual(alt, ['100.64.1.9:8791'])
-  })
-
-  test('the primary address is not repeated as an alternate', () => {
-    const { alt } = pairingURL({ host: '192.168.1.5', port: 8791, alt: ['192.168.1.5', '100.64.1.9'] })
-    assert.deepEqual(alt, ['100.64.1.9:8791'])
-  })
-
-  test('no second address means no alt at all, rather than an empty one', () => {
-    assert.ok(!pairingURL({ host: '192.168.1.5', port: 8791 }).url.includes('alt='))
+  test('carries no code once there is none outstanding', () => {
+    assert.equal(pairing({ host: 'x', port: 1 }).code, null)
   })
 })
 

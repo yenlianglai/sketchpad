@@ -1,4 +1,4 @@
-// The MCP surface: seven tools over the shared state. Provider-agnostic — any MCP client can call
+// The MCP surface: eight tools over the shared state. Provider-agnostic — any MCP client can call
 // these, over stdio or Streamable HTTP.
 //
 // buildMcpServer() makes a fresh Server bound to the same state for every transport, because the
@@ -82,6 +82,11 @@ export const TOOLS = [
     }
   },
   {
+    name: 'sketchpad_pairing_code',
+    description: 'Get a pairing code to read out to the person so they can connect an iPad. Eight characters they type into the app; good for ten minutes and for one device. Use it when they ask how to connect, or when no iPad is connected and they want one. Each call retires the previous code.',
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
     name: 'sketchpad_status',
     description: 'Whether an iPad is connected, which page it has open, and how many pages are waiting.',
     inputSchema: { type: 'object', properties: {} }
@@ -112,7 +117,7 @@ const summariseTurn = t =>
   `note=${JSON.stringify(t.text || '')}  replies=${t.replies?.length ?? 0}` +
   (t.replies?.length ? ' (' + t.replies.map(r => r.kind || 'text').join(', ') + ')' : '')
 
-export function buildMcpServer({ state, broadcast, clientCount, log = () => {} }) {
+export function buildMcpServer({ state, broadcast, clientCount, devices, log = () => {} }) {
   const server = new Server({ name: 'sketchpad', version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
@@ -174,6 +179,15 @@ export function buildMcpServer({ state, broadcast, clientCount, log = () => {} }
       if (!clientCount()) return fail(OFFLINE)
       broadcast({ type: 'title', title: String(a.title), boardId: a.board_id ?? state.currentBoard?.id })
       return text(`titled "${a.title}"`)
+    },
+
+    async sketchpad_pairing_code() {
+      const { formatted } = devices.mintCode()
+      return text([
+        `pairing code: ${formatted}`,
+        'Read it out to them. In Sketchpad on the iPad: Settings → Pair, type the code.',
+        'Good for ten minutes, and for one iPad. Asking again replaces it.'
+      ].join('\n'))
     },
 
     async sketchpad_status() {
