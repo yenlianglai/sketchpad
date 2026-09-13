@@ -16,17 +16,16 @@
   <img alt="Apple Pencil" src="https://img.shields.io/badge/Apple%20Pencil-required-black">
 </p>
 
-<p align="center">
-  <img src="docs/hero.png" width="620" alt="A wireframe sketched on an iPad, with the agent's reply waiting to be placed on the canvas">
-</p>
-
-Typing is a bad way to describe a layout, a flow, or a shape. Sketchpad gives your agent a surface
-it can actually see: you sketch with an Apple Pencil and press Send, the agent gets the page as an
-image, and it answers in the same medium — a few pen strokes on top of your drawing, or a rendered
-diagram dropped in as a layer you can draw over and send back.
+Typing is a bad way to describe a layout, a flow, or a shape. So draw it: sketch with an Apple
+Pencil, press Send, and your agent gets the page as an image. It answers in the same medium — a few
+pen strokes on top of your drawing, or a rendered diagram dropped in as a layer you can draw over
+and send back.
 
 Your agent keeps its own session, memory and tools. Sketchpad is an MCP server, so it works with
 whatever you already use.
+
+**You will need** an iPad with an Apple Pencil, and a Mac with Xcode — there is no App Store build,
+so you sign the app yourself.
 
 ---
 
@@ -46,15 +45,19 @@ one's config, merged and backed up. No paths to type.
 npm run register -- --write
 ```
 
-| Client | Also installable as |
+<details>
+<summary>Rather install it yourself</summary>
+
+| Client | |
 | --- | --- |
 | Claude Code | `claude plugin marketplace add .` then `claude plugin install sketchpad@sketchpad` — brings the `/sketchpad` skill with it |
 | Claude Desktop | `npm run bundle`, then drag `dist/sketchpad.mcpb` into Settings |
 | Cursor · Windsurf · VS Code | `{ "command": "sketchpad-mcp" }` after `npm link` |
 | Anything else with MCP | stdio: `sketchpad-mcp` · or HTTP: `http://localhost:8791/mcp` |
 
-**3. Install the iPad app.** There is no App Store build, so you sign it yourself. A free Apple ID
-works and needs re-signing every seven days.
+</details>
+
+**3. Install the iPad app.** A free Apple ID works, and needs re-signing every seven days.
 
 ```bash
 brew install xcodegen
@@ -70,21 +73,13 @@ Bonjour; on a network that blocks it, tap **Scan the QR code** and point the cam
 
 ## What you can do
 
-> *"Here's the onboarding screen. What am I missing?"* — it looks at the sketch and circles the gap
-> in your own ink.
-
-> *"Turn this into a state chart."* — it renders one and hands it over as a layer you can trace and
-> correct.
-
-> *"What changed since last time?"* — strokes it has already seen come through greyed out, so it can
-> see exactly what you added.
-
 <p align="center">
-  <img src="docs/layers.png" width="560" alt="A rendered diagram sitting on the canvas as a layer beneath the sketch">
+  <img src="docs/hero.png" width="620" alt="A wireframe sketched on an iPad, with the agent's reply waiting to be placed on the canvas">
 </p>
 
-Nothing the agent sends touches your canvas on its own. Replies queue as cards; you place them
-where you want, or dismiss them.
+Nothing the agent sends touches your canvas on its own. Replies queue as cards, like the one above;
+you place them where you want, or dismiss them. Strokes it has already seen come back greyed out on
+the next send, so it can tell what you changed.
 
 - **Strokes** arrive as real editable pen strokes, placed over your drawing and drawn in one at a
   time. Erase them, lasso them, draw over them.
@@ -92,6 +87,10 @@ where you want, or dismiss them.
   strokes. Long-press to grab, drag to move, pinch to resize, lock and trace.
 - **Sheets and turns.** Every send is kept with its full strokes, so you can reopen one, export it,
   branch it into a new sheet, or remove just the strokes the agent added that turn.
+
+<p align="center">
+  <img src="docs/layers.png" width="560" alt="A rendered diagram sitting on the canvas as a layer beneath the sketch">
+</p>
 
 | Gesture | |
 | --- | --- |
@@ -118,6 +117,8 @@ With a keyboard: `⌘↩` send, `⌘N` new sheet, `⌘\` panel, `⌘0` fit.
 
 The loop an agent should run is in [`.claude/skills/sketchpad/SKILL.md`](.claude/skills/sketchpad/SKILL.md).
 
+Three environment variables are worth knowing about:
+
 | Variable | Default | |
 | --- | --- | --- |
 | `SKETCHPAD_PORT` | `8791` | Your registered MCP URL carries this, so the server never moves it silently. |
@@ -132,15 +133,16 @@ The loop an agent should run is in [`.claude/skills/sketchpad/SKILL.md`](.claude
   running a tool. It costs almost nothing in tokens, but you cannot type into it meanwhile. Treat it
   as a mode you enter and leave.
 - **Same network only.** No relay, no cloud. Pages never leave your machine.
-- **Rendering is the agent's job.** Sketchpad places a Mermaid or draw.io diagram; it does not draw
-  one, so your agent needs its own way to produce an image.
+- **Sketchpad places diagrams, it does not render them.** Hand it a PNG or SVG and it becomes a
+  layer, so an agent that wants to send you a Mermaid chart needs its own way to turn one into an
+  image.
 
 ---
 
 This is a side project, used daily by exactly one person. Issues and patches welcome —
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the layout and how to run the tests.
 
-If it saves you some typing, you can [buy me a coffee](https://ko-fi.com/ryanlai880122). It costs
-nothing to run, so that goes on the Apple developer account that keeps the iPad build signed.
+If it saves you some typing, [buy me a coffee](https://ko-fi.com/ryanlai880122) — it goes on the
+Apple developer account that keeps the iPad build signed.
 
 MIT
