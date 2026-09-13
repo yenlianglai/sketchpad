@@ -140,9 +140,9 @@ The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/sk
 - **Locked and encrypted by default.** Only iPads you have paired can connect, each with its own key;
   the agent's endpoint is not reachable from the network at all; traffic is TLS, pinned at pairing.
   [How that works](CONTRIBUTING.md#pairing) if you want to check it.
-- **Works away from home.** [Tailscale](https://tailscale.com) on both, and one pairing covers home
-  and away — WireGuard straight between your two machines, no relay of ours. Without it, the local
-  network and nothing else.
+- **Local network only.** No relay, no cloud, no account — the iPad talks to your computer and to
+  nothing else. Your Mac is offered at every address it answers on, so moving between wifi and
+  ethernet does not mean pairing again.
 - **It places diagrams, it does not render them.** Hand it a PNG or SVG and it becomes a layer;
   turning a Mermaid chart into one is the agent's job.
 

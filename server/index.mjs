@@ -27,8 +27,8 @@ const PORT = Number(process.env.SKETCHPAD_PORT ?? 8791)
 // Generated on first run and kept, so there is no unprotected default. SKETCHPAD_NO_TOKEN=1 opts out.
 const { token: TOKEN } = loadOrCreateToken()
 const ADDRESSES = addresses()
-const HOST = process.env.SKETCHPAD_HOST || ADDRESSES.lan
-// Reachable from the tailnet as well, so one pairing covers being away from this network.
+const HOST = process.env.SKETCHPAD_HOST || ADDRESSES.primary
+// The others this machine answers on, so switching between wifi and ethernet needs no re-pair.
 const ALT = ADDRESSES.all.filter(a => a !== HOST)
 const QUIET = process.env.SKETCHPAD_QUIET === '1'
 
@@ -46,9 +46,9 @@ state.prune()
 hub.onGreeting(() => ({ type: 'hello', listening: state.isListening() }))
 
 // Encrypted by default. SKETCHPAD_NO_TLS=1 drops back to plain http, which is only reasonable on a
-// network you control or a tunnel that already encrypts (Tailscale, say).
+// network you control or behind something that already encrypts.
 const TLS = process.env.SKETCHPAD_NO_TLS !== '1'
-// Every address the certificate has to be valid for, or dialling the tailnet one would fail the
+// Every address the certificate has to be valid for, or dialling one of the others would fail the
 // name check even with the right fingerprint.
 const tls = TLS ? await loadOrCreateCert({ dir: configDir(), hosts: [HOST, ...ALT] }) : null
 const SCHEME = TLS ? 'https' : 'http'

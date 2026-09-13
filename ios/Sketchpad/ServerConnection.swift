@@ -199,9 +199,9 @@ final class ServerConnection: NSObject, ObservableObject {
         }
     }
 
-    /// Every address this Mac said it answers on. Away from home the local one is dead and the
-    /// tailnet one works; at home it is the other way round. Rather than asking which network you
-    /// are on, try them in turn.
+    /// Every address this Mac said it answers on — it usually has more than one, and which of them
+    /// is reachable depends on the network this iPad is currently on. Rather than asking, try them
+    /// in turn.
     private func rotateHost() {
         guard let s = settings, !s.altHosts.isEmpty else { return }
         var ring = [s.host] + s.altHosts

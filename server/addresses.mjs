@@ -3,27 +3,17 @@
 import { networkInterfaces, hostname } from 'node:os'
 import { Bonjour } from 'bonjour-service'
 
-/// Tailscale hands out addresses from the carrier-grade NAT range, which nothing else on a home
-/// network uses. Spotting one needs no CLI and no dependency.
-const isTailnet = ip => {
-  const [a, b] = ip.split('.').map(Number)
-  return a === 100 && b >= 64 && b <= 127
-}
 const usable = a => a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254')
 
-/// Every address this machine can be reached on, best first: the local network, then the tailnet.
+/// Every address this machine can be reached on, the first one first.
 ///
-/// The iPad is told all of them. On your own wifi the local address is direct and fast; away from it
-/// the tailnet address still works, over WireGuard, with no relay of ours in between. One pairing
-/// covers being at home and being somewhere else.
+/// A laptop usually has more than one — wifi and ethernet, or a VPN alongside either. The iPad is
+/// told all of them and tries each in turn, so moving between them does not need a re-pair, and the
+/// certificate is issued for all of them so none of them fails the name check.
 export function addresses() {
-  const all = Object.values(networkInterfaces()).flatMap(list => list ?? []).filter(usable)
-  const lan = all.filter(a => !isTailnet(a.address)).map(a => a.address)
-  const tailnet = all.filter(a => isTailnet(a.address)).map(a => a.address)
-  return { lan: lan[0] ?? 'localhost', tailnet: tailnet[0] ?? null, all: [...lan, ...tailnet] }
+  const all = Object.values(networkInterfaces()).flatMap(list => list ?? []).filter(usable).map(a => a.address)
+  return { primary: all[0] ?? 'localhost', all }
 }
-
-export const isTailnetAddress = isTailnet
 
 /// Advertise `_sketchpad._tcp` so the app finds this computer without anyone typing an address.
 /// Pure JS rather than macOS's `dns-sd`, so this works on Windows and Linux too. Returns a stop

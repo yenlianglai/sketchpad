@@ -91,15 +91,16 @@ describe('what the iPad is told', () => {
   })
 })
 
-describe('spotting a tailnet address', () => {
-  test('the carrier-grade NAT range is Tailscale; ordinary private ranges are not', async () => {
+describe('the addresses this machine answers on', () => {
+  test('are all offered, with one of them first', async () => {
     const { addresses } = await import('../server/addresses.mjs')
     const found = addresses()
-    // Whatever this machine has, the split must be consistent: nothing can be in both lists.
-    assert.equal(found.all.includes(found.lan) || found.lan === 'localhost', true)
-    if (found.tailnet) {
-      assert.match(found.tailnet, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./)
-      assert.notEqual(found.lan, found.tailnet)
+    assert.ok(found.all.includes(found.primary) || found.primary === 'localhost')
+    assert.equal(new Set(found.all).size, found.all.length, 'no address offered twice')
+    for (const a of found.all) {
+      assert.match(a, /^\d{1,3}(\.\d{1,3}){3}$/)
+      assert.ok(!a.startsWith('127.'), 'loopback is not something the iPad can reach')
+      assert.ok(!a.startsWith('169.254'), 'a self-assigned address means the network did not work')
     }
   })
 })

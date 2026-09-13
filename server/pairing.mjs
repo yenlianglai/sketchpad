@@ -4,8 +4,6 @@
 // when an agent is asked for a code. Wording that drifts between them is wording that stops being
 // true somewhere.
 
-import { isTailnetAddress } from './addresses.mjs'
-
 /// What the iPad needs to be told, and what it works out for itself.
 ///
 /// Only the code is here. The address it usually finds over Bonjour, and the certificate it learns
@@ -50,10 +48,6 @@ export function pairingBanner({ host, port, code, alt = [], token, linked }) {
     '',
     `  Agent   ${setupCommand({ linked })}`,
     '')
-
-  if (alt.some(isTailnetAddress)) {
-    lines.push('  Tailnet this code also works away from this network, over Tailscale.', '')
-  }
   return lines
 }
 
