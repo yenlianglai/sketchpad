@@ -151,7 +151,9 @@ The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/sk
 A side project, used daily by exactly one person. Issues and patches welcome —
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the layout and the tests.
 
-If it saves you some typing, [buy me a coffee](https://ko-fi.com/ryanlai880122) — it goes towards the
-Apple developer account that keeps the iPad build signed.
+If it saves you some typing, a coffee goes towards the Apple developer account that keeps the iPad
+build signed.
+
+[![Buy me a coffee at ko-fi.com](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/N2F026XMI6)
 
 MIT
