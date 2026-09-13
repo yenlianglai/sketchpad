@@ -60,7 +60,18 @@ struct ContentView: View {
             floatingChrome
             sidebar
             connectionCard
+            shortcuts
         }
+    }
+
+    /// Hardware-keyboard shortcuts, for an iPad in a Magic Keyboard.
+    private var shortcuts: some View {
+        ZStack {
+            Button("New sheet") { store.newBoard() }.keyboardShortcut("n", modifiers: .command)
+            Button("Toggle panel") { toggleDrawer(tab) }.keyboardShortcut("\\", modifiers: .command)
+            Button("Fit page") { canvasController.zoomToFit(layers: store.current.layers) }.keyboardShortcut("0", modifiers: .command)
+        }
+        .opacity(0).frame(width: 0, height: 0)
     }
 
     var body: some View {
@@ -99,8 +110,32 @@ struct ContentView: View {
         CanvasView(drawing: $drawing, controller: canvasController, pencilOnly: settings.pencilOnly, paper: settings.paper,
                    layers: store.current.layers, layerImage: { store.image(named: $0.file, in: store.layersDir) },
                    onStrokesChanged: strokesChanged,
-                   onLayerLongPress: grabLayer)
+                   onLayerLongPress: grabLayer,
+                   onTapEmpty: { if !layerMode { toggleDrawer(tab) } },
+                   onDropImage: dropImage)
             .ignoresSafeArea()
+            .overlay { if drawing.strokes.isEmpty && store.current.layers.isEmpty { emptyHint } }
+    }
+
+    /// A blank sheet should say what to do with it.
+    private var emptyHint: some View {
+        VStack(spacing: 6) {
+            Text("Draw here").font(.title3.weight(.semibold)).foregroundStyle(.secondary)
+            Text("Send when you want the agent to look.\nTwo fingers to undo, three to redo.")
+                .font(.subheadline).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+        }
+        .padding(.trailing, rightInset)
+        .allowsHitTesting(false)
+    }
+
+    private func dropImage(_ image: UIImage, at point: CGPoint) {
+        let maxW = min(520, canvasController.visibleCanvasRect.width * 0.6)
+        let w = min(maxW, image.size.width / 2)
+        let h = w * image.size.height / max(1, image.size.width)
+        guard let layer = store.addLayer(image: image, frame: CGRect(x: point.x - w / 2, y: point.y - h / 2, width: w, height: h)) else { return }
+        setLayerMode(true)
+        selectedLayerID = layer.id
+        showFlash("Dropped in — drag to move, pinch to resize")
     }
 
     private func grabLayer(_ id: UUID) {
@@ -303,6 +338,7 @@ struct ContentView: View {
                     .background(Color.black, in: Capsule()).shadow(color: .black.opacity(0.22), radius: 12, y: 8)
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.return, modifiers: .command)
                 .disabled(sending || (drawing.strokes.isEmpty && store.current.layers.isEmpty))
                 // The floating PencilKit picker spans most of a narrow (portrait) width; keep Send above it there.
                 .padding(.trailing, rightInset + 24).padding(.bottom, geo.size.width - rightInset < 1000 ? 130 : 28)
@@ -471,6 +507,8 @@ struct ContentView: View {
         let dates = strokes.map { $0.path.creationDate.timeIntervalSince1970 }
         store.recordAgentStrokes(turnId: turn.id, dates: dates)
         store.update(turn.id) { t in if let i = t.agentItems.firstIndex(where: { $0.id == item.id }) { t.agentItems[i].strokeDates += dates } }
+        // Scroll to where it is about to draw, so you never miss it happening off-screen.
+        canvasController.reveal(PKDrawing(strokes: strokes).bounds)
         Task { @MainActor in
             for s in strokes {
                 drawing.append(PKDrawing(strokes: [s]))

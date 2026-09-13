@@ -88,6 +88,16 @@ where you want, or dismiss them.
 - **Sheets and turns.** Every send is kept with its full strokes, so you can reopen one, export it,
   branch it into a new sheet, or remove just the strokes the agent added that turn.
 
+| Gesture | |
+| --- | --- |
+| Two fingers · three fingers | Undo · redo |
+| Two-finger double tap | Fit the page |
+| Tap bare canvas | Show or hide the panel |
+| Long-press a layer | Grab it, then drag or pinch |
+| Drop an image | Becomes a layer — drop a screenshot in and annotate it |
+
+With a keyboard: `⌘↩` send, `⌘N` new sheet, `⌘\` panel, `⌘0` fit.
+
 ---
 
 ## Tools

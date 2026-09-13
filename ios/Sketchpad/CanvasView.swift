@@ -59,6 +59,31 @@ final class CanvasController: ObservableObject {
         let size = canvas?.bounds.size ?? CGSize(width: 1000, height: 700)
         return CGRect(x: contentOffset.x / zoom, y: contentOffset.y / zoom, width: size.width / zoom, height: size.height / zoom)
     }
+
+    /// Everything on the page, strokes and layers together.
+    func contentRect(layers: [Layer]) -> CGRect {
+        var r = canvas?.drawing.strokes.isEmpty == false ? canvas!.drawing.bounds : .null
+        for l in layers { r = r.union(l.frame) }
+        return r
+    }
+
+    /// Fit the whole page on screen, the way a two-finger double tap does everywhere else.
+    func zoomToFit(layers: [Layer], inset: CGFloat = 40) {
+        guard let canvas else { return }
+        let content = contentRect(layers: layers)
+        guard !content.isNull, content.width > 1, content.height > 1 else { return }
+        canvas.zoom(to: content.insetBy(dx: -inset, dy: -inset), animated: true)
+    }
+
+    /// Bring a rect into view if it is off-screen, so the agent never draws somewhere you cannot see.
+    func reveal(_ rect: CGRect, animated: Bool = true) {
+        guard let canvas else { return }
+        let visible = visibleCanvasRect.insetBy(dx: 24, dy: 24)
+        guard !visible.contains(rect) else { return }
+        canvas.scrollRectToVisible(CGRect(x: rect.midX * zoom - canvas.bounds.width / 2,
+                                          y: rect.midY * zoom - canvas.bounds.height / 2,
+                                          width: canvas.bounds.width, height: canvas.bounds.height), animated: animated)
+    }
 }
 
 struct CanvasView: UIViewRepresentable {
@@ -71,6 +96,10 @@ struct CanvasView: UIViewRepresentable {
     var onStrokesChanged: () -> Void
     /// Long-pressing a layer (finger or Pencil) while drawing: hand the layer id back so the app can enter layer mode.
     var onLayerLongPress: ((UUID) -> Void)?
+    /// A finger tap on bare canvas. Only fires when fingers cannot draw, so it is unambiguous.
+    var onTapEmpty: (() -> Void)?
+    /// An image dropped onto the canvas, at that canvas point.
+    var onDropImage: ((UIImage, CGPoint) -> Void)?
 
     static let contentSize = CGSize(width: 4000, height: 6000)
 
@@ -115,6 +144,33 @@ struct CanvasView: UIViewRepresentable {
         press.delegate = context.coordinator
         canvas.addGestureRecognizer(press)
 
+        // The gestures every pencil app has: two fingers undo, three fingers redo, two-finger
+        // double tap fits the page. Fingers never draw here, so none of them cost a stroke.
+        let undo = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.twoFingerTap))
+        undo.numberOfTouchesRequired = 2
+        undo.delegate = context.coordinator
+        canvas.addGestureRecognizer(undo)
+
+        let redo = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.threeFingerTap))
+        redo.numberOfTouchesRequired = 3
+        redo.delegate = context.coordinator
+        canvas.addGestureRecognizer(redo)
+
+        let fit = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.zoomToFit))
+        fit.numberOfTouchesRequired = 2
+        fit.numberOfTapsRequired = 2
+        fit.delegate = context.coordinator
+        canvas.addGestureRecognizer(fit)
+        undo.require(toFail: fit)
+
+        // A single finger tap on bare canvas gets the chrome out of the way, or brings it back.
+        let bare = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.singleTap))
+        bare.delegate = context.coordinator
+        canvas.addGestureRecognizer(bare)
+
+        // Drop a screenshot or a photo straight onto the page.
+        container.addInteraction(UIDropInteraction(delegate: context.coordinator))
+
         controller.canvas = canvas
         controller.layerHost = host
         controller.toolPicker.addObserver(canvas)
@@ -142,7 +198,7 @@ struct CanvasView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    final class Coordinator: NSObject, PKCanvasViewDelegate, UIGestureRecognizerDelegate {
+    final class Coordinator: NSObject, PKCanvasViewDelegate, UIGestureRecognizerDelegate, UIDropInteractionDelegate {
         var parent: CanvasView
         var updatingFromCanvas = false
         weak var canvas: PKCanvasView?
@@ -156,6 +212,11 @@ struct CanvasView: UIViewRepresentable {
         }
 
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            if let tap = g as? UITapGestureRecognizer, tap.numberOfTouchesRequired == 1 {
+                // Only when a finger cannot draw, and only on bare canvas.
+                guard parent.pencilOnly, let canvas else { return false }
+                return layer(at: tap.location(in: canvas)) == nil
+            }
             guard g is UILongPressGestureRecognizer, let canvas, parent.onLayerLongPress != nil else { return true }
             return layer(at: g.location(in: canvas)) != nil
         }
@@ -165,6 +226,42 @@ struct CanvasView: UIViewRepresentable {
             guard g.state == .began, let canvas, let l = layer(at: g.location(in: canvas)) else { return }
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             parent.onLayerLongPress?(l.id)
+        }
+
+        @objc func singleTap() { parent.onTapEmpty?() }
+
+        @objc func twoFingerTap() {
+            guard canvas?.undoManager?.canUndo == true else { return }
+            canvas?.undoManager?.undo()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        @objc func threeFingerTap() {
+            guard canvas?.undoManager?.canRedo == true else { return }
+            canvas?.undoManager?.redo()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        @objc func zoomToFit() {
+            parent.controller.zoomToFit(layers: parent.layers)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        // MARK: dropping an image
+
+        func dropInteraction(_ i: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
+            session.canLoadObjects(ofClass: UIImage.self)
+        }
+        func dropInteraction(_ i: UIDropInteraction, sessionDidUpdate session: UIDropSession) -> UIDropProposal {
+            UIDropProposal(operation: .copy)
+        }
+        func dropInteraction(_ i: UIDropInteraction, performDrop session: UIDropSession) {
+            guard let view = i.view else { return }
+            let point = parent.controller.canvasPoint(fromView: session.location(in: view))
+            session.loadObjects(ofClass: UIImage.self) { [weak self] items in
+                guard let image = items.first as? UIImage else { return }
+                self?.parent.onDropImage?(image, point)
+            }
         }
 
 

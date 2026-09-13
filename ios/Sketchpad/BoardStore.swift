@@ -149,6 +149,17 @@ final class BoardStore: ObservableObject {
         return layer
     }
 
+    /// An image dropped in from Photos, Files, or another app.
+    @discardableResult
+    func addLayer(image: UIImage, kind: String = "image", frame: CGRect) -> Layer? {
+        guard let png = image.pngData() else { return nil }
+        let name = "\(UUID().uuidString).png"
+        try? png.write(to: layerFileURL(name))
+        let layer = Layer(file: name, kind: kind, frame: frame)
+        var b = current; b.layers.append(layer); b.updatedAt = Date(); current = b
+        return layer
+    }
+
     func updateLayer(_ layer: Layer) {
         var b = current
         if let i = b.layers.firstIndex(where: { $0.id == layer.id }) { b.layers[i] = layer; current = b }
