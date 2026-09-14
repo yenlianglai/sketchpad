@@ -18,12 +18,13 @@ const TOKEN = 'stdio-test-token'
 const BASE = `https://127.0.0.1:${PORT}`
 
 describe('over stdio', () => {
-  let client, transport, configDir, fetch
+  let client, transport, configDir, spoolDir, fetch
 
   before(async () => {
     // Its own config directory: the wrapper reads the token and certificate from wherever the
     // server put them, and this suite must not read or write the real ones.
     configDir = mkdtempSync(join(tmpdir(), 'sketchpad-stdio-config-'))
+    spoolDir = mkdtempSync(join(tmpdir(), 'sketchpad-stdio-spool-'))
     transport = new StdioClientTransport({
       command: 'node',
       args: [join(ROOT, 'server/mcp-stdio.mjs')],
@@ -34,7 +35,7 @@ describe('over stdio', () => {
         SKETCHPAD_QUIET: '1',
         SKETCHPAD_NO_BONJOUR: '1',
         SKETCHPAD_TOKEN: TOKEN,
-        SKETCHPAD_CONFIG_DIR: configDir
+        SKETCHPAD_CONFIG_DIR: configDir, SKETCHPAD_SPOOL_DIR: spoolDir
       },
       stderr: 'ignore'
     })
@@ -60,6 +61,7 @@ describe('over stdio', () => {
       }
     } catch { /* already gone */ }
     rmSync(configDir, { recursive: true, force: true })
+    rmSync(spoolDir, { recursive: true, force: true })
   })
 
   test('it starts the shared server and forwards the tools', async () => {

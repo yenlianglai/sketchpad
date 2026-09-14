@@ -23,7 +23,7 @@ const TOKEN = 'test-token-not-a-secret'
 const AUTH = { authorization: `Bearer ${TOKEN}` }
 
 describe('over http', () => {
-  let server, client, ipad, configDir, fetch
+  let server, client, ipad, configDir, spoolDir, fetch
 
   const fromIPad = []
 
@@ -31,12 +31,13 @@ describe('over http', () => {
     // Its own config directory, so the suite never touches the token, certificate or paired
     // devices belonging to whoever is running it.
     configDir = mkdtempSync(join(tmpdir(), 'sketchpad-config-'))
+    spoolDir = mkdtempSync(join(tmpdir(), 'sketchpad-spool-'))
     server = spawn('node', [join(ROOT, 'server/index.mjs')], {
       cwd: mkdtempSync(join(tmpdir(), 'sketchpad-http-')),
       env: {
         ...process.env,
         SKETCHPAD_PORT: String(PORT), SKETCHPAD_QUIET: '1', SKETCHPAD_NO_BONJOUR: '1',
-        SKETCHPAD_TOKEN: TOKEN, SKETCHPAD_CONFIG_DIR: configDir
+        SKETCHPAD_TOKEN: TOKEN, SKETCHPAD_CONFIG_DIR: configDir, SKETCHPAD_SPOOL_DIR: spoolDir
       },
       stdio: ['ignore', 'ignore', 'inherit']
     })
@@ -65,6 +66,7 @@ describe('over http', () => {
     ipad?.close()
     server?.kill()
     rmSync(configDir, { recursive: true, force: true })
+    rmSync(spoolDir, { recursive: true, force: true })
   })
 
   const call = (name, args = {}) => client.callTool({ name, arguments: args })
