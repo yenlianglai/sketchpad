@@ -19,10 +19,10 @@ Loop until they tell you to stop (a note saying 結束 / stop, or a request that
    - **Hand over a rendering** when you actually made one: a mermaid or draw.io diagram you rendered to PNG/SVG, a generated image. Use `image_path` — absolute, since the server has its own working directory, not yours — with `kind` (mermaid | drawio | image), and `place_as_layer: true` when it belongs on the canvas as a movable layer rather than in their panel.
 
    Nothing you send to the iPad is applied on its own; it queues as a card they place or dismiss. That is a reason to be useful, not a reason to be liberal — every card is one more thing for them to deal with. The substance of your answer belongs in this conversation, where it can be read, quoted and followed up.
-6. Once you understand what the page is about, call `sketchpad_set_title` once with a 2–5 word title. Leave a title they chose themselves alone.
-7. To answer "what changed" or compare versions, use `sketchpad_list_turns` and `sketchpad_get_turn`.
-8. Go back to step 1.
+6. Go back to step 1.
 
 If you need to see the canvas without waiting, call `sketchpad_get_canvas`.
 
-`sketchpad_status` says whether an iPad is connected and who else is listening — `agents_waiting` above one means another agent may take the next page instead of you. If nothing is connected, `sketchpad_pairing_code` gives you a code to read out: eight characters they type into Settings → Pair on the iPad, good for ten minutes.
+`sketchpad_status` says whether an iPad is connected and who else is listening — `agents_waiting` above one means another agent may take the next page instead of you. When nothing is connected it also carries a code to read out: eight characters they type into Settings → Pair on the iPad, good for ten minutes.
+
+"What changed since last time" is already answered in the image: the strokes you have seen are grey and the new ones are dark. There is no history to fetch.

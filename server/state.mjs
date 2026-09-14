@@ -104,8 +104,6 @@ export function createState({ broadcast, clientCount, spoolDir, now = () => Date
 
   /// null when nobody answered; { png } — possibly without one, for a blank canvas — when they did.
   const requestSnapshot = (timeoutMs = 4000) => ask('canvas', {}, timeoutMs)
-  const listTurns = ({ boardId, limit = 20 } = {}) => ask('list_turns', { boardId, limit }).then(r => r?.turns ?? null)
-  const getTurn = (turnId, includeImage = true) => ask('get_turn', { turnId, includeImage }).then(r => r?.turn ?? null)
 
   // MARK: replies waiting for the iPad
 
@@ -182,7 +180,7 @@ export function createState({ broadcast, clientCount, spoolDir, now = () => Date
 
   return {
     pushTurn, takeTurn, spoolPage,
-    ask, answer, requestSnapshot, listTurns, getTurn,
+    ask, answer, requestSnapshot,
     recordReply, repliesSince,
     publishFile, spooledFile, prune,
     pending: () => queue.length,

@@ -122,19 +122,7 @@ describe('over http', () => {
     assert.equal((await asked).content.find(c => c.type === 'image').data, SKETCH)
   })
 
-  test('the history comes from the iPad, not from here', async () => {
-    const asked = call('sketchpad_list_turns', { board_id: 'all' })
-    await waitFor(() => !!seen('ask', m => m.kind === 'list_turns'))
-    const question = seen('ask', m => m.kind === 'list_turns')
-    await answer({ id: question.id, turns: [{ turnId: 'kept-on-device', ts: 1, strokes: 4, text: 'from the iPad' }] })
-    assert.match((await asked).content[0].text, /kept-on-device/)
-  })
 
-  test('naming the page reaches the iPad', async () => {
-    await call('sketchpad_set_title', { title: 'Login flow' })
-    await waitFor(() => !!seen('title'))
-    assert.equal(seen('title').title, 'Login flow')
-  })
 
   test('an unknown path still answers rather than hanging', async () => {
     const res = await fetch(`${BASE}/nothing-here`, { headers: AUTH })

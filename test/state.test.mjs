@@ -95,17 +95,16 @@ describe('state', () => {
 
   describe('asking the iPad', () => {
     test('the question goes out and the answer comes back', async () => {
-      const asked = state.listTurns({ boardId: 'all' })
-      const question = sent.find(m => m.type === 'ask' && m.kind === 'list_turns')
+      const asked = state.requestSnapshot(500)
+      const question = sent.find(m => m.type === 'ask' && m.kind === 'canvas')
       assert.ok(question, 'the iPad should have been asked')
-      state.answer(question.id, { turns: [{ turnId: 'f', boardTitle: 'Flow' }] })
-      assert.deepEqual((await asked).map(t => t.turnId), ['f'])
+      state.answer(question.id, { png: 'AAAA' })
+      assert.equal((await asked).png, 'AAAA')
     })
 
     test('no iPad connected resolves immediately rather than hanging', async () => {
       clients = 0
       assert.equal(await state.requestSnapshot(5000), null)
-      assert.equal(await state.listTurns(), null)
       assert.equal(sent.filter(m => m.type === 'ask').length, 0)
     })
 

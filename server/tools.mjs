@@ -54,42 +54,8 @@ export const TOOLS = [
     }
   },
   {
-    name: 'sketchpad_list_turns',
-    description: 'List pages sent (newest first): turn_id, time, page, note, new_strokes, and what you replied. Defaults to the page the iPad currently has open. The history lives on the iPad, so this needs it connected.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        board_id: { type: 'string', description: 'Page id. Omit for the current page; pass "all" for every page.' },
-        limit: { type: 'number', description: 'Default 20.' }
-      }
-    }
-  },
-  {
-    name: 'sketchpad_get_turn',
-    description: 'Fetch one earlier page: its note and the PNG as it was at that moment. Use it to compare versions or answer "what did I change". The history lives on the iPad, so this needs it connected.',
-    inputSchema: {
-      type: 'object',
-      properties: { turn_id: { type: 'string' }, include_image: { type: 'boolean', description: 'Default true.' } },
-      required: ['turn_id']
-    }
-  },
-  {
-    name: 'sketchpad_set_title',
-    description: 'Give the current page a short title based on what is drawn on it (2–5 words). Call it once you understand the page, not on every turn. The person can rename it later.',
-    inputSchema: {
-      type: 'object',
-      properties: { title: { type: 'string' }, board_id: { type: 'string', description: 'Omit for the current page.' } },
-      required: ['title']
-    }
-  },
-  {
-    name: 'sketchpad_pairing_code',
-    description: 'Get a pairing code to read out to the person so they can connect an iPad. Eight characters they type into the app; good for ten minutes and for one device. Use it when they ask how to connect, or when no iPad is connected and they want one. Each call retires the previous code.',
-    inputSchema: { type: 'object', properties: {} }
-  },
-  {
     name: 'sketchpad_status',
-    description: 'Whether an iPad is connected, which page it has open, how many pages are waiting, and how many agents are listening. agents_waiting above 1 means another agent is competing for the next page and may take it instead of you.',
+    description: 'Whether an iPad is connected, which page it has open, how many pages are waiting, and who else is listening — agents_waiting above 1 means another agent may take the next page instead of you. When nothing is connected it also gives you a code to read out, which is how someone connects an iPad without leaving this conversation.',
     inputSchema: { type: 'object', properties: {} }
   }
 ]
@@ -169,40 +135,12 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, agents 
       return text(clientCount() ? 'shown' : 'shown (no iPad connected right now)')
     },
 
-    async sketchpad_list_turns(a) {
-      const rows = await state.listTurns({ boardId: a.board_id, limit: Number(a.limit) || 20 })
-      if (!rows) return fail(OFFLINE)
-      return text(rows.length ? rows.map(summariseTurn).join('\n') : 'no turns yet')
-    },
-
-    async sketchpad_get_turn(a) {
-      const turn = await state.getTurn(a.turn_id, a.include_image !== false)
-      if (!turn) return fail(clientCount() ? `unknown turn_id ${a.turn_id}` : OFFLINE)
-      const content = [{
-        type: 'text',
-        text: `turn_id=${turn.turnId} page="${turn.boardTitle ?? ''}" time=${new Date(turn.ts).toISOString()}\n` +
-              `note: ${turn.text || '(none)'}\nreplies: ${JSON.stringify(turn.replies ?? [])}`
-      }]
-      if (turn.png) content.push(image(turn.png))
-      return { content }
-    },
-
-    async sketchpad_set_title(a) {
-      if (!clientCount()) return fail(OFFLINE)
-      broadcast({ type: 'title', title: String(a.title), boardId: a.board_id ?? state.currentBoard?.id })
-      return text(`titled "${a.title}"`)
-    },
-
-    async sketchpad_pairing_code() {
-      const { formatted } = devices.mintCode()
-      return text([
-        `pairing code: ${formatted}`,
-        'Read it out to them. In Sketchpad on the iPad: Settings → Pair, type the code.',
-        'Good for ten minutes, and for one iPad. Asking again replaces it.'
-      ].join('\n'))
-    },
-
     async sketchpad_status() {
+      const connected = clientCount() > 0
+      // Nothing there is the one moment a code is worth having, so it comes with the answer rather
+      // than needing a second tool. The outstanding one is reused: asking twice should not quietly
+      // invalidate the code somebody is halfway through typing.
+      const code = connected ? null : (devices?.pendingCode() ?? devices?.mintCode().formatted ?? null)
       return text(JSON.stringify({
         ipad_connected: clientCount() > 0,
         clients: clientCount(),
@@ -211,6 +149,7 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, agents 
         agents_waiting: state.waiting(),
         you: agent ? { id: agent.id, name: agent.name } : null,
         other_agents: (agents?.list() ?? []).filter(x => x.id !== agent?.id).map(x => ({ name: x.name, waiting: x.waiting })),
+        ...(code ? { pairing_code: code, pairing: `Read out "${code}" — they type it into Settings → Pair on the iPad. Good for ten minutes.` } : {}),
         current_page: state.currentBoard,
         last_turn_id: state.lastTurn?.turnId ?? null
       }))

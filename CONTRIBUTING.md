@@ -13,7 +13,7 @@ server/
   paths.mjs         where things go on each platform
   hub.mjs           the iPads currently connected — broadcast, clientCount
   state.mjs         what is in flight: the queue, questions for the iPad, the spool
-  tools.mjs         the eight MCP tools, over state
+  tools.mjs         the four MCP tools, over state
   routes.mjs        the http surface, including /mcp
   addresses.mjs     the addresses this machine answers on, and Bonjour
   pairing.mjs       what a person is told in order to connect an iPad

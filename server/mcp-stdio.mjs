@@ -131,7 +131,9 @@ async function withUpstream(fn) {
   }
 }
 
-const INSTRUCTIONS = 'A person is drawing on an iPad with a pencil. Call sketchpad_wait_for_turn to receive each turn: a PNG of their page (grey = strokes you already saw, dark = new since last turn) plus an optional handwritten note. Look at the image first. Answer with sketchpad_show: a short text; an svg in that image\'s pixel coordinates when a small drawn addition helps (it becomes editable strokes on their canvas); or image_path when you have rendered a diagram or generated an image (it becomes a layer they can move and draw over). Use sketchpad_list_turns / sketchpad_get_turn to look back at earlier versions. Name the page with sketchpad_set_title once you know what it is. Then wait for the next turn.'
+// Repeated here because a client reads this before it has spoken to the shared server; it is kept
+// in step with the server's own copy by a test.
+import { INSTRUCTIONS } from './tools.mjs'
 
 const server = new Server({ name: 'sketchpad', version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
 

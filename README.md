@@ -114,12 +114,12 @@ With a keyboard: `⌘↩` send, `⌘N` new sheet, `⌘\` panel, `⌘0` fit.
 | Tool | |
 | --- | --- |
 | `sketchpad_wait_for_turn` | Wait for a page. Returns the note and the page as an image. |
-| `sketchpad_show` | Reply. `svg` becomes strokes on the canvas, `image_path` becomes a layer. |
+| `sketchpad_show` | Reply. `svg` becomes strokes, `image_path` a layer, text on its own a note. |
 | `sketchpad_get_canvas` | Snapshot the canvas now, without waiting. |
-| `sketchpad_list_turns` · `sketchpad_get_turn` | Look back at earlier pages. Needs the iPad awake. |
-| `sketchpad_set_title` | Name the sheet from what is on it. |
-| `sketchpad_pairing_code` | A code to read out, so an iPad can be connected without leaving the chat. |
-| `sketchpad_status` | Whether an iPad is connected. |
+| `sketchpad_status` | What is connected and who is listening — and a code to read out when nothing is. |
+
+Four, on purpose: receive, answer, look, ask. Every tool is context an agent carries and one more
+thing for it to choose wrongly.
 
 The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/skills/sketchpad/SKILL.md).
 

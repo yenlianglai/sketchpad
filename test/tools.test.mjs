@@ -52,7 +52,7 @@ describe('tools', () => {
   test('every documented tool is actually offered', async () => {
     const offered = (await client.listTools()).tools.map(t => t.name).sort()
     assert.deepEqual(offered, TOOLS.map(t => t.name).sort())
-    assert.equal(offered.length, 8)
+    assert.equal(offered.length, 4)
   })
 
   describe('wait_for_turn', () => {
@@ -132,67 +132,21 @@ describe('tools', () => {
     })
   })
 
-  describe('looking back', () => {
-    const history = [
-      { turnId: 'x2', text: 'second', strokes: 5, ts: 2, boardTitle: 'B', replies: [{ kind: 'sketch' }] },
-      { turnId: 'x1', text: 'first', strokes: 2, ts: 1, boardTitle: 'B', replies: [] }
-    ]
-
-    test('list_turns summarises what the iPad sends back, newest first', async () => {
-      ipad = () => ({ turns: history })
-      const lines = textOf(await call('sketchpad_list_turns')).split('\n')
-      assert.match(lines[0], /^x2/)
-      assert.match(lines[0], /strokes=5/)
-      assert.match(lines[0], /replies=1 \(sketch\)/)
-      assert.match(lines[1], /^x1/)
-    })
-
-    test('list_turns on an empty page says so', async () => {
-      ipad = () => ({ turns: [] })
-      assert.equal(textOf(await call('sketchpad_list_turns')), 'no turns yet')
-    })
-
-    test('get_turn returns the page and its image', async () => {
-      ipad = m => ({ turn: { ...history[0], turnId: m.turnId, text: 'note here', png: RED_PNG } })
-      const result = await call('sketchpad_get_turn', { turn_id: 'y1' })
-      assert.match(textOf(result), /note: note here/)
-      assert.equal(imageOf(result).data, RED_PNG)
-    })
-
-    test('a turn id the iPad does not know is an error the agent can read', async () => {
-      ipad = () => ({})
-      const result = await call('sketchpad_get_turn', { turn_id: 'nope' })
-      assert.equal(result.isError, true)
-      assert.match(textOf(result), /unknown turn_id nope/)
-    })
-
-    test('with no iPad there is no history to read, and the agent is told why', async () => {
-      clients = 0
-      for (const [name, args] of [['sketchpad_list_turns', {}], ['sketchpad_get_turn', { turn_id: 'x1' }], ['sketchpad_set_title', { title: 'x' }]]) {
-        const result = await call(name, args)
-        assert.equal(result.isError, true, name)
-        assert.match(textOf(result), /no iPad connected/, name)
-      }
-    })
+  test('status carries a code to read out when nothing is connected', async () => {
+    clients = 0
+    const said = JSON.parse(textOf(await call('sketchpad_status')))
+    assert.match(said.pairing_code, /^[0-9A-HJ-NP-TV-Z]{4}-[0-9A-HJ-NP-TV-Z]{4}$/)
+    assert.equal(devices.pendingCode(), said.pairing_code)
   })
 
-  test('set_title reaches the iPad', async () => {
-    state.pushTurn({ turnId: 'z', boardId: 'B7', ts: Date.now() })
-    await call('sketchpad_set_title', { title: 'Onboarding flow' })
-    assert.deepEqual(sent.at(-1), { type: 'title', boardId: 'B7', title: 'Onboarding flow' })
+  test('and reuses it, so asking twice does not invalidate one being typed', async () => {
+    clients = 0
+    const first = JSON.parse(textOf(await call('sketchpad_status'))).pairing_code
+    assert.equal(JSON.parse(textOf(await call('sketchpad_status'))).pairing_code, first)
   })
 
-  test('the agent can hand over a pairing code to read out', async () => {
-    const said = textOf(await call('sketchpad_pairing_code'))
-    const code = said.match(/([0-9A-HJ-NP-TV-Z]{4}-[0-9A-HJ-NP-TV-Z]{4})/)?.[1]
-    assert.ok(code, said)
-    assert.equal(devices.pendingCode(), code, 'the code it read out is the one that will work')
-  })
-
-  test('asking for another code retires the one already spoken', async () => {
-    const first = textOf(await call('sketchpad_pairing_code')).match(/([0-9A-HJ-NP-TV-Z]{4}-[0-9A-HJ-NP-TV-Z]{4})/)[1]
-    await call('sketchpad_pairing_code')
-    assert.notEqual(devices.pendingCode(), first)
+  test('but not when an iPad is already there', async () => {
+    assert.equal(JSON.parse(textOf(await call('sketchpad_status'))).pairing_code, undefined)
   })
 
   test('status reports what an agent needs to decide whether to wait', async () => {
