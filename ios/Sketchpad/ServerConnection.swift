@@ -190,7 +190,12 @@ final class ServerConnection: NSObject, ObservableObject {
                 guard let self, self.socket === task else { return }
                 switch result {
                 case .success(let msg):
-                    if self.status != .connected { self.status = .connected; self.reconnectDelay = 1; self.lastError = nil }
+                    if self.status != .connected {
+                        self.status = .connected
+                        self.reconnectDelay = 1
+                        self.triedSinceConnected = 0
+                        self.lastError = nil
+                    }
                     if case .string(let s) = msg { self.handle(s) }
                     self.receiveLoop(task)
                 case .failure(let err):
@@ -214,18 +219,36 @@ final class ServerConnection: NSObject, ObservableObject {
         }
     }
 
+    /// How many addresses have been tried since the last time anything answered. Once every address
+    /// we were given has failed, the ones we were given are the wrong ones.
+    private var triedSinceConnected = 0
+
     /// Every address this Mac said it answers on — it usually has more than one, and which of them
     /// is reachable depends on the network this iPad is currently on. Rather than asking, try them
-    /// in turn.
+    /// in turn; and once they have all failed, take whatever Bonjour has found instead.
+    ///
+    /// That last part is what makes carrying both devices to a different network a non-event: the
+    /// computer's address changes, the saved ones stop answering, and the app finds the new one.
     private func rotateHost() {
-        guard let s = settings, !s.altHosts.isEmpty else { return }
-        var ring = [s.host] + s.altHosts
-        guard let i = ring.firstIndex(of: s.host) else { return }
-        let next = ring[(i + 1) % ring.count]
+        guard let s = settings else { return }
+        let ring = [s.host] + s.altHosts
+
+        triedSinceConnected += 1
+        if triedSinceConnected > ring.count, let found = discovered.first(where: { !ring.contains($0) }) {
+            triedSinceConnected = 0
+            s.altHosts = ring.filter { $0 != found }
+            s.host = found
+            return
+        }
+
+        guard !s.altHosts.isEmpty else { return }
+        var ring2 = ring
+        guard let i = ring2.firstIndex(of: s.host) else { return }
+        let next = ring2[(i + 1) % ring2.count]
         guard next != s.host else { return }
-        ring.removeAll { $0 == next }
+        ring2.removeAll { $0 == next }
         s.host = next
-        s.altHosts = ring
+        s.altHosts = ring2
     }
 
     private func scheduleReconnect() {

@@ -147,8 +147,12 @@ The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/sk
   the agent's endpoint is not reachable from the network at all; traffic is TLS, pinned at pairing.
   [How that works](CONTRIBUTING.md#pairing) if you want to check it.
 - **Local network only.** No relay, no cloud, no account — the iPad talks to your computer and to
-  nothing else. Your Mac is offered at every address it answers on, so moving between wifi and
-  ethernet does not mean pairing again.
+  nothing else. That is the same sentence twice: two devices on different networks always need
+  something in the middle, so the only way to have nobody in the middle is to be on one network.
+  If you need them apart, anything that puts both on one virtual network works — a VPN of your
+  choosing. Sketchpad offers every address your computer answers on, including that one.
+- **Changing networks is a non-event.** The certificate outlives the address, and the app takes
+  whichever address answers, so carrying both devices somewhere else does not mean pairing again.
 - **It places diagrams, it does not render them.** Hand it a PNG or SVG and it becomes a layer;
   turning a Mermaid chart into one is the agent's job.
 

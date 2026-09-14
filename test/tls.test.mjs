@@ -34,11 +34,14 @@ describe('the certificate', () => {
     assert.match(san, /DNS:localhost/)
   })
 
-  test('is replaced when the machine moves to an address it does not cover', async () => {
+  test('survives the machine moving to a different network', async () => {
+    // The addresses go into the certificate, but nothing we speak to checks them — the iPad pins the
+    // fingerprint. Reissuing here would lock out every iPad already paired with this computer,
+    // which is what carrying a laptop between home and the office used to do.
     const home = await loadOrCreateCert({ dir, hosts: ['192.168.1.5'] })
-    const cafe = await loadOrCreateCert({ dir, hosts: ['10.0.0.9'] })
-    assert.equal(cafe.source, 'new')
-    assert.notEqual(cafe.fingerprint, home.fingerprint)
+    const office = await loadOrCreateCert({ dir, hosts: ['10.0.0.9'] })
+    assert.equal(office.source, 'saved')
+    assert.equal(office.fingerprint, home.fingerprint)
   })
 
   test('the private key is readable only by its owner', async () => {

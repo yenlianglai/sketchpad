@@ -19,9 +19,13 @@ const CERT_DAYS = 3650
 export const fingerprint = cert =>
   new X509Certificate(cert).fingerprint256.replace(/:/g, '').toLowerCase()
 
-/// The certificate for this machine: the one on disk, or a new one covering the addresses it
-/// answers on. Regenerated when the machine's address changes, since a pinned certificate is
-/// checked by fingerprint but still has to be valid for the name being dialled.
+/// The certificate for this machine: the one on disk, or a new one if there is not a usable one.
+///
+/// Kept across a change of address, deliberately. The addresses are written into it when it is
+/// created, but nothing we speak to checks them: the iPad pins the fingerprint, and the agent's own
+/// client verifies against this certificate rather than a name. Reissuing on a new address would
+/// therefore buy nothing and cost every pairing — carrying a laptop from home to the office would
+/// silently lock out every iPad that had been paired with it.
 export async function loadOrCreateCert({ dir, hosts = [] }) {
   const certPath = join(dir, 'cert.pem')
   const keyPath = join(dir, 'key.pem')
@@ -29,10 +33,9 @@ export async function loadOrCreateCert({ dir, hosts = [] }) {
   try {
     const cert = readFileSync(certPath, 'utf8')
     const key = readFileSync(keyPath, 'utf8')
-    const x509 = new X509Certificate(cert)
-    const stillValid = new Date(x509.validTo) > new Date()
-    const covers = hosts.every(h => coveredBy(x509, h))
-    if (stillValid && covers) return { cert, key, fingerprint: fingerprint(cert), source: 'saved' }
+    if (new Date(new X509Certificate(cert).validTo) > new Date()) {
+      return { cert, key, fingerprint: fingerprint(cert), source: 'saved' }
+    }
   } catch { /* no certificate yet, or one we cannot read: make a new one */ }
 
   const altNames = [
@@ -58,11 +61,6 @@ export async function loadOrCreateCert({ dir, hosts = [] }) {
 }
 
 const isIP = h => /^\d{1,3}(\.\d{1,3}){3}$/.test(h)
-
-function coveredBy(x509, host) {
-  const san = x509.subjectAltName ?? ''
-  return san.includes(isIP(host) ? `IP Address:${host}` : `DNS:${host}`)
-}
 
 const dedupe = names => {
   const seen = new Set()
