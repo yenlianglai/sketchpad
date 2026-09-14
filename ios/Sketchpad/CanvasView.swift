@@ -5,7 +5,14 @@ import PencilKit
 final class CanvasController: ObservableObject {
     weak var canvas: PKCanvasView?
     weak var layerHost: LayerHostView?
-    let toolPicker = PKToolPicker()
+    let toolPicker: PKToolPicker = {
+        let picker = PKToolPicker()
+        // The paper is always white, whatever the iPad's appearance setting. Without telling the
+        // picker that, it assumes a dark canvas in dark mode and hands out light ink — so the pen
+        // you chose draws white on white, and your strokes are simply not there.
+        picker.colorUserInterfaceStyle = .light
+        return picker
+    }()
     @Published var isDrawing = false
     /// When the pencil was last on the glass. Whatever else is touching the screen around then is
     /// the hand holding it, not a gesture.
