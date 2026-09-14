@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "sketchpad",
   "display_name": "Sketchpad",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Draw on an iPad. Your coding agent sees the page, answers, and draws back.",
   "long_description": "Sketchpad turns an iPad into a handwriting pad for any MCP agent. You draw with an Apple Pencil; the agent receives the page as an image, answers, and can draw back as editable strokes or hand over a rendered diagram as a movable layer.",
   "author": {

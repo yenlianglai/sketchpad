@@ -1,7 +1,7 @@
 {
   "name": "sketchpad",
   "displayName": "Sketchpad",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Draw on an iPad. Your coding agent sees the page, answers, and draws back.",
   "author": {
     "name": "Ryan Lai"
