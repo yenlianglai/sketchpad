@@ -182,6 +182,27 @@ describe('state', () => {
       assert.equal(state.waiting(), 0, 'giving up should not leave a waiter behind')
     })
 
+    test('a page addressed to one agent is not taken by another', async () => {
+      const other = state.takeTurn(200, 'agent-A')
+      state.pushTurn(page('for-B', { agentId: 'agent-B' }))
+      assert.equal(await other, null, 'it must wait for the agent it was sent to')
+      assert.equal(state.pending(), 1, 'and stay in the queue rather than being dropped')
+    })
+
+    test('and is still there when that agent turns up later', async () => {
+      state.pushTurn(page('for-B', { agentId: 'agent-B' }))
+      const late = await state.takeTurn(200, 'agent-B')
+      assert.equal(late?.turnId, 'for-B')
+    })
+
+    test('an unaddressed page behind an addressed one still gets through', async () => {
+      // Otherwise one page waiting for an absent agent would block everything behind it.
+      state.pushTurn(page('for-B', { agentId: 'agent-B' }))
+      state.pushTurn(page('for-anyone'))
+      const got = await state.takeTurn(200, 'agent-A')
+      assert.equal(got?.turnId, 'for-anyone')
+    })
+
     test('two pages reach two agents, one each', async () => {
       const waits = [state.takeTurn(500), state.takeTurn(500)]
       state.pushTurn(page('one'))

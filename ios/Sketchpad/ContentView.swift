@@ -334,7 +334,18 @@ struct ContentView: View {
         GeometryReader { geo in
         VStack { Spacer()
             HStack { Spacer()
-                Button { Task { await send() } } label: {
+                // Tapping sends to whoever is listening, which is almost always what you want. The
+                // menu only earns its place when there is actually a choice to make.
+                Menu {
+                    Button { Task { await sendTurn() } } label: { Label("Send to whoever is listening", systemImage: "paperplane") }
+                    Divider()
+                    ForEach(conn.agents) { agent in
+                        Button { Task { await sendTurn(to: agent) } } label: {
+                            Label(agent.waiting ? agent.name : "\(agent.name) (not listening)",
+                                  systemImage: agent.waiting ? "antenna.radiowaves.left.and.right" : "moon.zzz")
+                        }
+                    }
+                } label: {
                     HStack(spacing: 10) {
                         if sending { ProgressView().tint(.white) } else { Image(systemName: "paperplane.fill") }
                         Text("Send").font(.headline)
@@ -344,7 +355,10 @@ struct ContentView: View {
                     }
                     .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 56)
                     .background(Color.black, in: Capsule()).shadow(color: .black.opacity(0.22), radius: 12, y: 8)
+                } primaryAction: {
+                    Task { await send() }
                 }
+                .menuOrder(.fixed)
                 .buttonStyle(.plain)
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(sending || (drawing.strokes.isEmpty && store.current.layers.isEmpty))

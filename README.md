@@ -139,6 +139,8 @@ The loop an agent follows is in [`.claude/skills/sketchpad/SKILL.md`](.claude/sk
   status pill lists them. Disconnect one from there and it stops reaching the iPad, and is told why.
 - **One page goes to one agent.** If two are listening, whichever asked first takes it and the other
   keeps waiting — they do not both act on your drawing. `sketchpad_status` names who else is there.
+  Hold **Send** to pick one instead; a page addressed that way waits for it rather than being taken
+  by whoever happened to be listening.
 - **Your drawings live on the iPad.** The Mac forgets a page once it has handed it over, which is why
   looking back needs the iPad awake.
 - **Locked and encrypted by default.** Only iPads you have paired can connect, each with its own key;

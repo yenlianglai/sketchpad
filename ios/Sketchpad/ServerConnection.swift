@@ -82,11 +82,14 @@ final class ServerConnection: NSObject, ObservableObject {
     }
 
     /// Sends one turn. Returns the server's turn id.
-    func sendTurn(png: Data, text: String, newStrokes: Int, boardId: UUID, boardTitle: String) async throws -> String {
+    func sendTurn(png: Data, text: String, newStrokes: Int, boardId: UUID, boardTitle: String, to agentId: String? = nil) async throws -> String {
         guard let base = baseURL else { throw NSError(domain: "sketchpad", code: 1, userInfo: [NSLocalizedDescriptionKey: "No host configured"]) }
         var req = authorized(base.appendingPathComponent("turn"), method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
-        let body: [String: Any] = ["text": text, "png": png.isEmpty ? NSNull() : "data:image/png;base64," + png.base64EncodedString(), "strokes": newStrokes, "boardId": boardId.uuidString, "boardTitle": boardTitle]
+        var body: [String: Any] = ["text": text, "png": png.isEmpty ? NSNull() : "data:image/png;base64," + png.base64EncodedString(), "strokes": newStrokes, "boardId": boardId.uuidString, "boardTitle": boardTitle]
+        // Addressed to one agent: it waits in the queue for that one rather than going to whoever
+        // happens to be listening.
+        if let agentId { body["agentId"] = agentId }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, resp) = try await session.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw NSError(domain: "sketchpad", code: 2, userInfo: [NSLocalizedDescriptionKey: "Server returned \((resp as? HTTPURLResponse)?.statusCode ?? 0)"]) }
