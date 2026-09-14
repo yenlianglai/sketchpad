@@ -94,7 +94,6 @@ final class CanvasController: ObservableObject {
 struct CanvasView: UIViewRepresentable {
     @Binding var drawing: PKDrawing
     let controller: CanvasController
-    var pencilOnly: Bool
     var paper: Paper
     var layers: [Layer]
     var layerImage: (Layer) -> UIImage?
@@ -134,7 +133,9 @@ struct CanvasView: UIViewRepresentable {
         canvas.minimumZoomScale = 0.1
         canvas.maximumZoomScale = 4
         canvas.contentSize = Self.contentSize
-        canvas.drawingPolicy = pencilOnly ? .pencilOnly : .anyInput
+        // The only mode. A finger pans and zooms; a hand can rest. Letting a finger draw means
+        // the hand draws too, which is not a trade worth offering.
+        canvas.drawingPolicy = .pencilOnly
         canvas.contentInsetAdjustmentBehavior = .never
         container.addSubview(canvas)
 
@@ -196,7 +197,9 @@ struct CanvasView: UIViewRepresentable {
 
     func updateUIView(_ container: UIView, context: Context) {
         guard let canvas = context.coordinator.canvas, let host = context.coordinator.host else { return }
-        canvas.drawingPolicy = pencilOnly ? .pencilOnly : .anyInput
+        // The only mode. A finger pans and zooms; a hand can rest. Letting a finger draw means
+        // the hand draws too, which is not a trade worth offering.
+        canvas.drawingPolicy = .pencilOnly
         if !context.coordinator.updatingFromCanvas, canvas.drawing.strokes.count != drawing.strokes.count || canvas.drawing.bounds != drawing.bounds {
             canvas.drawing = drawing
         }
@@ -227,7 +230,7 @@ struct CanvasView: UIViewRepresentable {
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             if let tap = g as? UITapGestureRecognizer, tap.numberOfTouchesRequired == 1 {
                 // Only when a finger cannot draw, and only on bare canvas.
-                guard parent.pencilOnly, let canvas else { return false }
+                guard let canvas else { return false }
                 return layer(at: tap.location(in: canvas)) == nil
             }
             guard g is UILongPressGestureRecognizer, let canvas, parent.onLayerLongPress != nil else { return true }

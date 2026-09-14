@@ -1,7 +1,7 @@
 import SwiftUI
 import PencilKit
 
-enum DrawerTab: String, CaseIterable { case turns = "Turns", media = "Media", pages = "Pages" }
+enum DrawerTab: String, CaseIterable { case turns = "History", pages = "Pages" }
 
 /// Actions the drawer can ask the main view to perform.
 struct DrawerActions {
@@ -37,7 +37,6 @@ struct Drawer: View {
             .overlay(alignment: .bottom) { Divider() }
             switch tab {
             case .turns: TurnsTab(actions: actions)
-            case .media: MediaTab(actions: actions)
             case .pages: PagesTab(actions: actions)
             }
         }

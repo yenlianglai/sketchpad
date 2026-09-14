@@ -31,23 +31,16 @@ struct SettingsView: View {
                         Button { settings.host = h } label: { Label("Switch to \(h)", systemImage: "bonjour") }
                     }
                     if let e = conn.lastError, conn.status != .connected { Text(e).font(.footnote).foregroundStyle(.red) }
-                } header: { Text("Connection") } footer: {
-                    Text("Sketchpad finds your Mac on the network by itself. Start it there with `npm run web-only`.")
-                }
-
-                Section("Canvas") {
-                    Picker("Paper", selection: $settings.paper) { Text("Plain").tag(Paper.plain); Text("Dots").tag(Paper.dots); Text("Grid").tag(Paper.grid) }.pickerStyle(.segmented)
-                    Toggle("Pencil only", isOn: $settings.pencilOnly)
-                    Text("Fingers pan and zoom; only the Pencil draws. Turn this off and a finger draws — so will the hand you rest on the screen.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-
-                Section {
                     Button { onPair() } label: { Label("Pair with a code", systemImage: "key.horizontal") }
-                    DisclosureGroup("Advanced", isExpanded: $showManual) {
-                        TextField("Address (e.g. 192.168.0.9:8791)", text: $settings.host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                        TextField("Token", text: $settings.token).textInputAutocapitalization(.never).autocorrectionDisabled()
+                } header: { Text("Connection") } footer: {
+                    Text("Sketchpad finds your Mac on the network by itself. Start it there with `sketchpad start`.")
+                }
+
+                Section("Paper") {
+                    Picker("Paper", selection: $settings.paper) {
+                        Text("Plain").tag(Paper.plain); Text("Dots").tag(Paper.dots); Text("Grid").tag(Paper.grid)
                     }
+                    .pickerStyle(.segmented).labelsHidden()
                 }
             }
             .navigationTitle("Settings")

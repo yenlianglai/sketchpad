@@ -15,6 +15,8 @@ struct ContentView: View {
     @State var showSettings = false
     @State var showPairing = false
     @State var showAgents = false
+    @State var showRename = false
+    @State var renaming = ""
     @State var previewTurn: Turn?
     @State var selectedLayerID: UUID?
     @State var layerMode = false
@@ -29,6 +31,19 @@ struct ContentView: View {
 
     let railWidth: CGFloat = 48
     let drawerWidth: CGFloat = 356
+
+    /// One scale for the floating chrome, so the top bar, the Send button and the rail agree with
+    /// each other instead of each having been nudged into place on its own.
+    enum Space {
+        /// From the edge of the screen.
+        static let edge: CGFloat = 20
+        /// Between one control and the next.
+        static let between: CGFloat = 12
+        /// Inside a pill or a button.
+        static let inside: CGFloat = 16
+        /// Every tappable control is the same height, so a row of them lines up.
+        static let control: CGFloat = 44
+    }
 
     var newStrokeCount: Int { max(0, drawing.strokes.count - store.current.sentStrokeCount) }
     /// While the pen is down the floating chrome fades. The rail and drawer never move: they sit at
@@ -107,13 +122,23 @@ struct ContentView: View {
             PairingSheet().environmentObject(settings).environmentObject(conn)
         }
         .sheet(isPresented: $showAgents) { AgentsView().environmentObject(conn) }
+        .alert("Rename page", isPresented: $showRename) {
+            TextField("Title", text: $renaming)
+            Button("Cancel", role: .cancel) { }
+            Button("Rename") {
+                let title = renaming.trimmingCharacters(in: .whitespaces)
+                guard !title.isEmpty else { return }
+                // Naming it yourself means the agent stops suggesting one.
+                store.rename(store.currentID, to: title)
+            }
+        }
         .sheet(item: $previewTurn) { t in TurnPreview(turn: t, onBranch: { branch(t) }).environmentObject(store) }
     }
 
     // MARK: pieces
 
     var canvas: some View {
-        CanvasView(drawing: $drawing, controller: canvasController, pencilOnly: settings.pencilOnly, paper: settings.paper,
+        CanvasView(drawing: $drawing, controller: canvasController, paper: settings.paper,
                    layers: store.current.layers, layerImage: { store.image(named: $0.file, in: store.layersDir) },
                    onStrokesChanged: strokesChanged,
                    onLayerLongPress: grabLayer,
@@ -235,10 +260,9 @@ struct ContentView: View {
     // MARK: chrome
 
     var topBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Space.between) {
             Menu {
-                ForEach(store.boardsByRecency.prefix(8)) { b in Button(b.title) { store.currentID = b.id } }
-                Divider()
+                Button { renaming = store.current.title; showRename = true } label: { Label("Rename…", systemImage: "pencil") }
                 Button { store.newBoard() } label: { Label("New page", systemImage: "plus") }
                 Button { showDrawer = true; tab = .pages } label: { Label("All pages…", systemImage: "square.grid.2x2") }
                 Divider()
@@ -252,7 +276,7 @@ struct ContentView: View {
                     Text(statusText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 16).frame(height: 44).background(.thinMaterial, in: Capsule())
+                .padding(.horizontal, Space.inside).frame(height: Space.control).background(.thinMaterial, in: Capsule())
             }
             .buttonStyle(.plain)
             chromeButton("arrow.uturn.backward") { canvasController.undo() }
@@ -263,7 +287,7 @@ struct ContentView: View {
                         Image(systemName: "square.on.square.dashed").font(.body.weight(.medium))
                         Text(layerMode ? "Layers · done" : "Layers").font(.subheadline.weight(.semibold))
                     }
-                    .padding(.horizontal, 16).frame(height: 44)
+                    .padding(.horizontal, Space.inside).frame(height: Space.control)
                     .background(layerMode ? Color.primary : Color.clear, in: Capsule())
                     .background(.thinMaterial, in: Capsule())
                     .foregroundStyle(layerMode ? Color(uiColor: .systemBackground) : .primary)
@@ -271,7 +295,7 @@ struct ContentView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.leading, 20).padding(.top, 20)
+        .padding(.leading, Space.edge).padding(.top, Space.edge)
     }
 
     func setLayerMode(_ on: Bool) {
@@ -312,14 +336,13 @@ struct ContentView: View {
     }
 
     var rail: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Space.between) {
             railButton("sidebar.trailing", on: showDrawer && tab == .turns, badge: unread) { toggleDrawer(.turns) }
-            railButton("photo.on.rectangle", on: showDrawer && tab == .media) { toggleDrawer(.media) }
             railButton("doc.on.doc", on: showDrawer && tab == .pages) { toggleDrawer(.pages) }
             Spacer()
             railButton("gearshape") { showSettings = true }
         }
-        .padding(.top, 20).padding(.bottom, 20)
+        .padding(.vertical, Space.edge)
         .frame(width: railWidth).frame(maxHeight: .infinity)
         .background(.regularMaterial)
         .overlay(alignment: .leading) { Divider() }
@@ -373,7 +396,7 @@ struct ContentView: View {
                             Text("\(newStrokeCount) new").font(.caption.bold()).padding(.horizontal, 9).frame(minHeight: 24).background(.white.opacity(0.22), in: Capsule())
                         }
                     }
-                    .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 56)
+                    .foregroundStyle(.white).padding(.horizontal, Space.inside + 6).frame(height: 56)
                     .background(Color.black, in: Capsule()).shadow(color: .black.opacity(0.22), radius: 12, y: 8)
                 } primaryAction: {
                     Task { await send() }
@@ -383,7 +406,9 @@ struct ContentView: View {
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(sending || (drawing.strokes.isEmpty && store.current.layers.isEmpty))
                 // The floating PencilKit picker spans most of a narrow (portrait) width; keep Send above it there.
-                .padding(.trailing, rightInset + 24).padding(.bottom, geo.size.width - rightInset < 1000 ? 130 : 28)
+                // Clear of the floating Pencil palette, which spans most of a narrow width.
+                .padding(.trailing, rightInset + Space.edge)
+                .padding(.bottom, geo.size.width - rightInset < 1000 ? 130 : Space.edge + 8)
             }
         }
         }

@@ -17,8 +17,6 @@ final class Settings: ObservableObject {
     /// Other addresses the same Mac answers on. Tried in turn when the first will not connect, so
     /// moving between networks does not mean pairing again.
     @Published var altHosts: [String] { didSet { d.set(altHosts, forKey: "altHosts") } }
-    /// Fingers pan and zoom, only the Pencil draws. Off lets a finger draw, for iPads without a Pencil.
-    @Published var pencilOnly: Bool { didSet { d.set(pencilOnly, forKey: "pencilOnly") } }
     @Published var paper: Paper { didSet { d.set(paper.rawValue, forKey: "paper") } }
 
     init() {
@@ -31,7 +29,6 @@ final class Settings: ObservableObject {
         token = d.string(forKey: "token") ?? ""
         fingerprint = d.string(forKey: "fingerprint") ?? ""
         altHosts = d.stringArray(forKey: "altHosts") ?? []
-        pencilOnly = d.object(forKey: "pencilOnly") as? Bool ?? true
         paper = Paper(rawValue: d.string(forKey: "paper") ?? "") ?? .plain
     }
 }
