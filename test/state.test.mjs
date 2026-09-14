@@ -64,6 +64,24 @@ describe('state', () => {
       assert.equal(state.isListening(), true)
     })
 
+    test('does not flicker between two polls', async () => {
+      // An agent asks with a 50s timeout and calls straight back. The grace has to cover that gap,
+      // or the light goes out every minute while somebody is plainly listening.
+      let clock = 1_000_000
+      const s = make({ now: () => clock })
+      await s.takeTurn(1)
+      clock += 50_000
+      assert.equal(s.isListening(), true)
+    })
+
+    test('goes out for real once an agent has stopped asking', async () => {
+      let clock = 1_000_000
+      const s = make({ now: () => clock })
+      await s.takeTurn(1)          // the poll finishes; nobody is blocked any more
+      clock += LISTEN_GRACE_MS + 1
+      assert.equal(s.isListening(), false, 'reported from the clock, not from the last broadcast')
+    })
+
     test('goes out once the grace period has passed', async () => {
       let clock = 1_000_000
       const s = make({ now: () => clock })

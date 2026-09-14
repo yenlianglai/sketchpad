@@ -279,9 +279,17 @@ struct ContentView: View {
             if store.currentTurns.last?.taken == true, store.currentTurns.last?.agentText == nil { return "agent reading…" }
             let listening = conn.agents.filter(\.waiting)
             switch listening.count {
-            case 0: return conn.agentListening ? "agent listening" : "nobody listening"
             case 1: return "\(listening[0].label) listening"
-            default: return "\(listening.count) agents listening"
+            case let n where n > 1: return "\(n) agents listening"
+            default: break
+            }
+            // Connected but not in wait_for_turn is a different thing from nothing being there, and
+            // saying "nobody listening" to someone whose agent is plainly running reads as a fault.
+            if conn.agentListening { return "agent listening" }
+            switch conn.agents.count {
+            case 0: return "no agent connected"
+            case 1: return "\(conn.agents[0].label) connected"
+            default: return "\(conn.agents.count) agents connected"
             }
         case .connecting: return "connecting…"
         case .disconnected: return "offline"

@@ -239,7 +239,7 @@ final class ServerConnection: NSObject, ObservableObject {
         let ring = [s.host] + s.altHosts
 
         triedSinceConnected += 1
-        if triedSinceConnected > ring.count, let found = discovered.first(where: { !ring.contains($0) }) {
+        if triedSinceConnected > ring.count + 1, let found = discovered.first(where: { !ring.contains($0) }) {
             triedSinceConnected = 0
             s.altHosts = ring.filter { $0 != found }
             s.host = found
@@ -256,11 +256,22 @@ final class ServerConnection: NSObject, ObservableObject {
         s.altHosts = ring2
     }
 
+    /// Come back at once, rather than waiting out a backoff that was counting down while the app
+    /// was suspended. Being away is not a network failure, and the first thing someone does on
+    /// returning is look at whether it is connected.
+    func wake() {
+        guard status != .connected else { return }
+        reconnectDelay = 1
+        triedSinceConnected = 0
+        reconnectNow()
+    }
+
     private func scheduleReconnect() {
         reconnectTask?.cancel()
-        // One full pass over the addresses before slowing down, so a move between networks is
-        // picked up in seconds rather than after the backoff has stretched out.
-        rotateHost()
+        // Not on the first failure. A blip is far more likely than a moved network, and switching
+        // address on one is how a moment's interruption turns into several failed attempts with the
+        // backoff growing between them.
+        if triedSinceConnected >= 1 { rotateHost() } else { triedSinceConnected += 1 }
         let delay = reconnectDelay
         reconnectDelay = min(reconnectDelay * 2, 15)
         reconnectTask = Task { [weak self] in

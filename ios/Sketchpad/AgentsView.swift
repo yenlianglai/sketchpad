@@ -15,9 +15,9 @@ struct AgentsView: View {
             List {
                 if conn.agents.isEmpty {
                     ContentUnavailableView(
-                        "Nothing is listening",
+                        "No agent connected",
                         systemImage: "antenna.radiowaves.left.and.right.slash",
-                        description: Text("Say `/sketchpad` to your agent, or ask it to listen to the iPad.")
+                        description: Text("Connect one with `sketchpad install` on your computer, then say `/sketchpad` to it.")
                     )
                 } else {
                     Section {
@@ -55,7 +55,7 @@ struct AgentsView: View {
                 .frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 2) {
                 Text(agent.label).font(.body)
-                Text(agent.waiting ? "waiting for a page" : "connected")
+                Text(agent.waiting ? "listening for a page" : "connected, not listening")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()

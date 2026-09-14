@@ -186,7 +186,10 @@ export function createState({ broadcast, clientCount, spoolDir, now = () => Date
     recordReply, repliesSince,
     publishFile, spooledFile, prune,
     pending: () => queue.length,
-    isListening: () => listening,
+    /// Worked out on the spot rather than read from the last broadcast — the cached value is only
+    /// there to notice a change worth telling the iPad about, and it goes stale if the timer that
+    /// maintains it has not fired yet.
+    isListening: () => waiters.length > 0 || now() - lastWaitAt < LISTEN_GRACE_MS,
     /// How many agents are blocked in wait_for_turn right now. More than one means they are
     /// competing for the next page, and only one of them will get it.
     waiting: () => waiters.length,
