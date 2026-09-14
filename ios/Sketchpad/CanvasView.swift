@@ -7,6 +7,9 @@ final class CanvasController: ObservableObject {
     weak var layerHost: LayerHostView?
     let toolPicker = PKToolPicker()
     @Published var isDrawing = false
+    /// When the pencil was last on the glass. Whatever else is touching the screen around then is
+    /// the hand holding it, not a gesture.
+    private(set) var lastPenUse: Date?
     @Published var contentOffset = CGPoint.zero
     @Published var zoom: CGFloat = 1
     private var idleTask: Task<Void, Never>?
@@ -18,10 +21,12 @@ final class CanvasController: ObservableObject {
     /// button that overlaps the canvas, so every pen-down also arms a fallback that restores the
     /// chrome a few seconds later; drawing changes and pen-up shorten that to one second.
     func penDown() {
+        lastPenUse = Date()
         if !isDrawing { isDrawing = true }
         penUp(after: 4.0)
     }
     func penUp(after seconds: Double = 1.0) {
+        lastPenUse = Date()
         idleTask?.cancel()
         idleTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
@@ -221,6 +226,28 @@ struct CanvasView: UIViewRepresentable {
             return layer(at: g.location(in: canvas)) != nil
         }
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+        /// Ignoring the hand you are resting on the screen.
+        ///
+        /// PencilKit will not *draw* from a finger when the policy is pencil-only, but it does
+        /// nothing about gestures: a palm settling on a layer for half a second grabbed it, and
+        /// moving your hand then dragged it. Two rules, which is what a writing app does:
+        ///
+        /// 1. A palm is wide and a fingertip is not, so anything broad is not a gesture.
+        /// 2. While the pencil is writing — or has just stopped — whatever else is on the glass is
+        ///    the hand holding it. Deliberate finger gestures come after you lift the pen.
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            if touch.type == .pencil { return true }
+            if touch.majorRadius > Self.palmRadius { return false }
+            if let since = parent.controller.lastPenUse, Date().timeIntervalSince(since) < Self.penGrace { return false }
+            return true
+        }
+
+        /// Wider than a fingertip and narrower than the heel of a hand. Reported in points, and it
+        /// runs large on the edge of the screen, so this is deliberately not tight.
+        private static let palmRadius: CGFloat = 40
+        /// Long enough to cover the pause between two strokes of the same character.
+        private static let penGrace: TimeInterval = 1.2
 
         @objc func longPress(_ g: UILongPressGestureRecognizer) {
             guard g.state == .began, let canvas, let l = layer(at: g.location(in: canvas)) else { return }

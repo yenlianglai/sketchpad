@@ -38,7 +38,7 @@ struct SettingsView: View {
                 Section("Canvas") {
                     Picker("Paper", selection: $settings.paper) { Text("Plain").tag(Paper.plain); Text("Dots").tag(Paper.dots); Text("Grid").tag(Paper.grid) }.pickerStyle(.segmented)
                     Toggle("Pencil only", isOn: $settings.pencilOnly)
-                    Text("Fingers pan and zoom; only the Pencil draws. Turn off to draw with a finger.")
+                    Text("Fingers pan and zoom; only the Pencil draws. Turn this off and a finger draws — so will the hand you rest on the screen.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
 

@@ -350,7 +350,9 @@ struct ContentView: View {
                         if sending { ProgressView().tint(.white) } else { Image(systemName: "paperplane.fill") }
                         Text("Send").font(.headline)
                         if newStrokeCount > 0 {
-                            Text("\(newStrokeCount)").font(.caption.bold()).padding(.horizontal, 7).frame(minWidth: 24, minHeight: 24).background(.white.opacity(0.22), in: Capsule())
+                            // A bare number on a button is a puzzle; the word is what makes it mean
+                            // "there is something here you have not sent yet".
+                            Text("\(newStrokeCount) new").font(.caption.bold()).padding(.horizontal, 9).frame(minHeight: 24).background(.white.opacity(0.22), in: Capsule())
                         }
                     }
                     .foregroundStyle(.white).padding(.horizontal, 22).frame(height: 56)
