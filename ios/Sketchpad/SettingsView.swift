@@ -18,13 +18,21 @@ struct SettingsView: View {
         }
     }
 
+    /// Same rule as the status pill: a socket that opened once is not the same as one that is
+    /// answering.
+    private var dotColour: Color {
+        guard conn.status == .connected else { return .red }
+        if let heard = conn.lastHeard, Date().timeIntervalSince(heard) > 45 { return .red }
+        return conn.agentListening ? .green : .orange
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     LabeledContent("Mac") { Text(settings.host.isEmpty ? "not set" : settings.host).foregroundStyle(.secondary) }
                     HStack(spacing: 8) {
-                        Circle().fill(conn.status == .connected ? (conn.agentListening ? Color.green : Color.orange) : Color.red).frame(width: 8, height: 8)
+                        Circle().fill(dotColour).frame(width: 8, height: 8)
                         Text(statusLine).font(.subheadline).foregroundStyle(.secondary)
                     }
                     ForEach(conn.discovered.filter { $0 != settings.host }, id: \.self) { h in

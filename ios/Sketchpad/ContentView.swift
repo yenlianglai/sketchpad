@@ -269,11 +269,19 @@ struct ContentView: View {
                 Button { showAgents = true } label: {
                     Label(conn.agents.isEmpty ? "Agents…" : "Agents (\(conn.agents.count))…", systemImage: "antenna.radiowaves.left.and.right")
                 }
+                Button { conn.reconnectNow() } label: { Label("Reconnect now", systemImage: "arrow.clockwise") }
             } label: {
                 HStack(spacing: 10) {
-                    Circle().fill(conn.status == .connected ? (conn.agentListening ? Color.green : Color.orange) : Color.red).frame(width: 8, height: 8)
-                    Text(store.current.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    Text(statusText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    // Wrapped in a timeline so the countdown ticks and a connection going quiet is
+                    // noticed on its own — confined to these two views, because redrawing the canvas
+                    // once a second while someone is writing on it would be a poor trade.
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        HStack(spacing: Space.between) {
+                            Circle().fill(statusColour).frame(width: 8, height: 8)
+                            Text(store.current.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            Text(statusText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
                     Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, Space.inside).frame(height: Space.control).background(.thinMaterial, in: Capsule())
@@ -298,6 +306,12 @@ struct ContentView: View {
         .padding(.leading, Space.edge).padding(.top, Space.edge)
     }
 
+    var statusColour: Color {
+        guard conn.status == .connected else { return .red }
+        if connectionIsStale { return .red }
+        return conn.agentListening ? .green : .orange
+    }
+
     func setLayerMode(_ on: Bool) {
         layerMode = on
         canvasController.isDrawing = false
@@ -306,9 +320,21 @@ struct ContentView: View {
         else if selectedLayerID == nil, let last = store.current.layers.last { selectedLayerID = last.id }
     }
 
+    /// The connection as it actually is, rather than as it was when the socket opened.
+    ///
+    /// "Connected" used to mean a socket had been opened at some point, which is not the same as
+    /// anything getting through. Twenty seconds without a word — two missed pings — is worth saying
+    /// out loud rather than leaving someone to wonder whether Send will do anything.
+    var connectionIsStale: Bool {
+        guard conn.status == .connected, let heard = conn.lastHeard else { return conn.status == .connected }
+        return Date().timeIntervalSince(heard) > 45
+    }
+
     var statusText: String {
         if sending { return "sending…" }
         switch conn.status {
+        case .connected where connectionIsStale:
+            return "no answer from your Mac"
         case .connected:
             if store.currentTurns.last?.taken == true, store.currentTurns.last?.agentText == nil { return "agent reading…" }
             let listening = conn.agents.filter(\.waiting)
@@ -326,7 +352,10 @@ struct ContentView: View {
             default: return "\(conn.agents.count) agents connected"
             }
         case .connecting: return "connecting…"
-        case .disconnected: return "offline"
+        case .disconnected:
+            guard let next = conn.nextRetry else { return "offline" }
+            let seconds = max(0, Int(next.timeIntervalSinceNow.rounded()))
+            return seconds > 1 ? "offline · retrying in \(seconds)s" : "offline · retrying"
         }
     }
 

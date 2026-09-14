@@ -35,6 +35,11 @@ final class ServerConnection: NSObject, ObservableObject {
     @Published var agentListening = false
     /// Everything currently connected, so you can see what you are talking to — and cut one off.
     @Published var agents: [Agent] = []
+    /// When something last came down the socket — a message, or a ping that was answered. "Connected"
+    /// on its own says a socket was opened once, which is not the same as anything getting through.
+    @Published var lastHeard: Date?
+    /// When the next reconnection attempt is due, so waiting does not look like doing nothing.
+    @Published var nextRetry: Date?
     @Published var discovered: [String] = []
     @Published var lastError: String?
 
@@ -172,6 +177,7 @@ final class ServerConnection: NSObject, ObservableObject {
 
     func reconnectNow() {
         reconnectDelay = 1
+        nextRetry = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         connect()
@@ -195,6 +201,8 @@ final class ServerConnection: NSObject, ObservableObject {
                 guard let self, self.socket === task else { return }
                 switch result {
                 case .success(let msg):
+                    self.lastHeard = Date()
+                    self.nextRetry = nil
                     if self.status != .connected {
                         self.status = .connected
                         self.reconnectDelay = 1
@@ -209,17 +217,33 @@ final class ServerConnection: NSObject, ObservableObject {
                     self.agentListening = false
                     self.agents = []
                     self.lastError = err.localizedDescription
+                    self.lastHeard = nil
                     self.scheduleReconnect()
                 }
             }
         }
     }
 
+    /// A ping every twenty seconds, and — this is the point — noticing when one is not answered.
+    ///
+    /// The failure was being thrown away, so a half-open connection went on claiming to be connected
+    /// until some later read happened to fail, which on iOS can take minutes. A ping that does not
+    /// come back is the earliest honest sign that the socket is gone.
     private func schedulePing(_ task: URLSessionWebSocketTask) {
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 20_000_000_000)
             guard let self, self.socket === task else { return }
-            task.sendPing { _ in }
+            task.sendPing { [weak self] error in
+                Task { @MainActor in
+                    guard let self, self.socket === task else { return }
+                    if error == nil {
+                        self.lastHeard = Date()
+                    } else {
+                        self.lastError = error?.localizedDescription
+                        self.reconnectNow()
+                    }
+                }
+            }
             self.schedulePing(task)
         }
     }
@@ -274,6 +298,7 @@ final class ServerConnection: NSObject, ObservableObject {
         if triedSinceConnected >= 1 { rotateHost() } else { triedSinceConnected += 1 }
         let delay = reconnectDelay
         reconnectDelay = min(reconnectDelay * 2, 15)
+        nextRetry = Date().addingTimeInterval(delay)
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
