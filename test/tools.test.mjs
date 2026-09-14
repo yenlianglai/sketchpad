@@ -145,8 +145,15 @@ describe('tools', () => {
     assert.equal(JSON.parse(textOf(await call('sketchpad_status'))).pairing_code, first)
   })
 
-  test('but not when an iPad is already there', async () => {
+  test('but not unasked when an iPad is already there', async () => {
     assert.equal(JSON.parse(textOf(await call('sketchpad_status'))).pairing_code, undefined)
+  })
+
+  test('and on request even then, which is how a second iPad gets added', async () => {
+    // Folding the old pairing_code tool into status lost this: with one iPad connected there was
+    // no way to get a code at all, so an agent asked for one had nothing to say.
+    const said = JSON.parse(textOf(await call('sketchpad_status', { pairing_code: true })))
+    assert.match(said.pairing_code, /^[0-9A-HJ-NP-TV-Z]{4}-[0-9A-HJ-NP-TV-Z]{4}$/)
   })
 
   test('status reports what an agent needs to decide whether to wait', async () => {

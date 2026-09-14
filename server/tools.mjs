@@ -17,7 +17,7 @@ export { VERSION } from './version.mjs'
 // stop — not just a list of what the tools do.
 export const INSTRUCTIONS = [
   'A person is drawing on an iPad with a pencil. The iPad is how they write to you; your own conversation is where they read your answer — answer there, at whatever length the question deserves, and use the iPad for what belongs on it.',
-  'Start with sketchpad_status. If no iPad is connected it carries a pairing code: read out those eight characters, tell them to type it into Settings → Pair on the iPad, and stop. Do not wait for something that is not there.',
+  'Start with sketchpad_status. If no iPad is connected it carries a pairing code: read out those eight characters, tell them to type it into Settings → Pair on the iPad, and stop. Do not wait for something that is not there. If they ask for a code while one is already connected — they are adding a second iPad — call status again with pairing_code: true.',
   'When one is connected, say once that you are listening, then call sketchpad_wait_for_turn (timeout_seconds 50). "No turn" only means the time ran out — call it again, silently, without narrating each attempt. If it reports ipad_connected=false twice, the iPad has gone: say so and stop.',
   'When a page arrives, look at the image first: grey strokes are ones you have already seen, dark strokes are new this turn, and layers you handed over earlier are underneath. Work out what they want before deciding how to answer — a page can be a question, a plan to pick holes in, or a note to themselves.',
   'Answer in your conversation. Then sketchpad_show, with the same turn_id: always a sentence of text so they know the page landed; svg in that image\'s pixel coordinates when a drawn addition is the answer, not as decoration; text with place_as_layer when words belong beside the drawing; image_path (absolute) when you actually rendered something.',
@@ -59,8 +59,13 @@ export const TOOLS = [
   },
   {
     name: 'sketchpad_status',
-    description: 'Whether an iPad is connected, which page it has open, how many pages are waiting, and who else is listening — agents_waiting above 1 means another agent may take the next page instead of you. When nothing is connected it also gives you a code to read out, which is how someone connects an iPad without leaving this conversation.',
-    inputSchema: { type: 'object', properties: {} }
+    description: 'Whether an iPad is connected, which page it has open, how many pages are waiting, and who else is listening — agents_waiting above 1 means another agent may take the next page instead of you. When nothing is connected it also carries a pairing code to read out. Ask for pairing_code when they want to connect another iPad, or when they ask for the code and one is already connected.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pairing_code: { type: 'boolean', description: 'Include a code even though an iPad is already connected — for adding a second one.' }
+      }
+    }
   }
 ]
 
@@ -139,12 +144,14 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, agents 
       return text(clientCount() ? 'shown' : 'shown (no iPad connected right now)')
     },
 
-    async sketchpad_status() {
+    async sketchpad_status(a = {}) {
       const connected = clientCount() > 0
-      // Nothing there is the one moment a code is worth having, so it comes with the answer rather
-      // than needing a second tool. The outstanding one is reused: asking twice should not quietly
-      // invalidate the code somebody is halfway through typing.
-      const code = connected ? null : (devices?.pendingCode() ?? devices?.mintCode().formatted ?? null)
+      // Nothing connected is the moment a code is obviously wanted, so it comes with the answer
+      // rather than needing a second tool — but it has to be askable for as well, or there is no way
+      // to add a second iPad while the first one is there. The outstanding code is reused: asking
+      // twice should not quietly invalidate one somebody is halfway through typing.
+      const wanted = !connected || a.pairing_code === true
+      const code = wanted ? (devices?.pendingCode() ?? devices?.mintCode().formatted ?? null) : null
       return text(JSON.stringify({
         ipad_connected: clientCount() > 0,
         clients: clientCount(),

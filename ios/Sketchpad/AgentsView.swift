@@ -25,7 +25,7 @@ struct AgentsView: View {
                             row(agent)
                         }
                     } footer: {
-                        Text("Disconnecting an agent stops it reaching this iPad until you restart Sketchpad on your computer.")
+                        Text("Disconnecting an agent stops it reaching this iPad. It stays out until you restart Sketchpad on your computer — there is no undo here.")
                     }
                 }
             }
