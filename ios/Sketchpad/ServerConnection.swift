@@ -8,7 +8,12 @@ struct Agent: Identifiable, Equatable {
     var id: String
     var name: String
     var version: String
+    /// The directory the client was working in — usually the project. Two windows of the same editor
+    /// are otherwise the same name twice.
+    var where_: String
     var waiting: Bool
+
+    var label: String { where_.isEmpty ? name : "\(name) · \(where_)" }
 }
 
 /// A file the agent handed back with a reply.
@@ -312,6 +317,7 @@ final class ServerConnection: NSObject, ObservableObject {
         return Agent(id: id,
                      name: m["name"] as? String ?? "an agent",
                      version: m["version"] as? String ?? "",
+                     where_: m["where"] as? String ?? "",
                      waiting: m["waiting"] as? Bool ?? false)
     }
 

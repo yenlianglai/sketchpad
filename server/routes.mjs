@@ -35,13 +35,8 @@ export function createRoutes({ state, hub, devices, agents, authorize, pairing, 
     if (req.method === 'POST') {
       try { body = JSON.parse((await readBody(req)).toString('utf8')) } catch { return send(res, 400, 'invalid json') }
     }
-    // Which agent this request speaks for. Null when it is shut out, or when something older than
-    // this wrapper is talking to us.
-    const agent = agents.seen(agentFromHeaders(req.headers))
-    if (!agent && agentFromHeaders(req.headers)) return send(res, 403, 'that agent has been disconnected from the iPad')
-
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    const server = buildMcpServer({ state, broadcast: hub.broadcast, clientCount: hub.clientCount, devices, agents, agent, log })
+    const server = buildMcpServer({ state, broadcast: hub.broadcast, clientCount: hub.clientCount, devices, agents, agent: agents.seen(agentFromHeaders(req.headers)), log })
     res.on('close', () => { transport.close(); server.close() })
     await server.connect(transport)
     await transport.handleRequest(req, res, body)
@@ -71,6 +66,11 @@ export function createRoutes({ state, hub, devices, agents, authorize, pairing, 
   return async function handle(req, res) {
     const url = new URL(req.url, 'http://x')
     if (!authorize(req, url)) return send(res, 401, 'not allowed')
+
+    // Any request carrying an identity counts as that agent still being here — including the
+    // wrapper's heartbeat, which is the only thing an idle client sends.
+    const claimed = agentFromHeaders(req.headers)
+    if (claimed && !agents.seen(claimed)) return send(res, 403, 'that agent has been disconnected from the iPad')
     try {
       if (url.pathname === '/mcp') return handleMCP(req, res)
       if (req.method === 'POST' && url.pathname === '/turn') return receiveTurn(req, res)

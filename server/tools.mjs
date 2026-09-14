@@ -13,9 +13,9 @@ import { VERSION } from './version.mjs'
 export { VERSION } from './version.mjs'
 
 export const INSTRUCTIONS = [
-  'A person is drawing on an iPad with a pencil.',
+  'A person is drawing on an iPad with a pencil. The iPad is how they write to you; your own conversation is where they read your answer.',
   'Call sketchpad_wait_for_turn to receive each turn: a PNG of their page (grey = strokes you already saw, dark = new since last turn) plus an optional handwritten note. Look at the image first.',
-  'Answer with sketchpad_show: a short text; an svg in that image\'s pixel coordinates when a small drawn addition helps (it becomes editable strokes on their canvas); or image_path when you have rendered a diagram or generated an image (it becomes a layer they can move and draw over).',
+  'Answer in your own conversation, at whatever length the question deserves. Then use sketchpad_show for what belongs on the iPad: a sentence of text so they know the page landed; an svg in that image\'s pixel coordinates when a drawn addition is the answer (it becomes editable strokes on their canvas); or image_path when you have rendered a diagram or generated an image (it becomes a layer they can move and draw over).',
   'Use sketchpad_list_turns / sketchpad_get_turn to look back at earlier versions. Name the page with sketchpad_set_title once you know what it is.',
   'Then wait for the next turn. Stop when the person asks or the request takes you elsewhere.'
 ].join(' ')
@@ -39,7 +39,7 @@ export const TOOLS = [
   },
   {
     name: 'sketchpad_show',
-    description: 'Reply to the person. `text` appears in their panel. Two ways to put something on their canvas: (1) `svg` — stroke-only shapes in the pixel coordinates of the turn_id image (viewBox="0 0 W H", W×H = image_px); it becomes editable pen strokes placed over their drawing, so use it for small additions: a box, an arrow, a corrected line. (2) `image_path` — a rendered mermaid / draw.io / generated image as an absolute path on this machine; it becomes a movable layer beneath their strokes. Pass `kind` with image_path so the panel labels it.',
+    description: 'Put something on the iPad. This is not where your answer goes — answer in your own conversation, which is where they are reading — this is for what belongs on the canvas, plus a sentence so they know the page landed. `text` appears in their panel. Two ways to put something on their canvas: (1) `svg` — stroke-only shapes in the pixel coordinates of the turn_id image (viewBox="0 0 W H", W×H = image_px); it becomes editable pen strokes placed over their drawing, so use it for small additions: a box, an arrow, a corrected line. (2) `image_path` — a rendered mermaid / draw.io / generated image as an absolute path on this machine; it becomes a movable layer beneath their strokes. Pass `kind` with image_path so the panel labels it.',
     inputSchema: {
       type: 'object',
       properties: {

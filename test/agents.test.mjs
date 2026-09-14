@@ -21,6 +21,18 @@ describe('the agent list', () => {
     assert.deepEqual(agents.list().map(a => [a.name, a.version]), [['Claude Code', '2.1']])
   })
 
+  test('and where it was working, so two of the same editor are not the same row twice', () => {
+    agents.seen({ id: 'a1', name: 'claude-code', where: 'sketchpad' })
+    agents.seen({ id: 'a2', name: 'claude-code', where: 'ai-npc-management' })
+    assert.deepEqual(agents.list().map(a => `${a.name} · ${a.where}`),
+                     ['claude-code · sketchpad', 'claude-code · ai-npc-management'])
+  })
+
+  test('a client that says nothing about where it is still gets a row', () => {
+    agents.seen({ id: 'a1', name: 'some-agent' })
+    assert.equal(agents.list()[0].where, '')
+  })
+
   test('tells the iPad as soon as one arrives', () => {
     agents.seen({ id: 'a1', name: 'Cursor' })
     const update = sent.find(m => m.type === 'agents')
@@ -139,9 +151,10 @@ describe('reading the agent off a request', () => {
       agentFromHeaders({
         'x-sketchpad-agent-id': 'a1',
         'x-sketchpad-agent-name': encodeURIComponent('Ryan’s editor'),
-        'x-sketchpad-agent-version': '1.0'
+        'x-sketchpad-agent-version': '1.0',
+        'x-sketchpad-agent-where': encodeURIComponent('sketchpad')
       }),
-      { id: 'a1', name: 'Ryan’s editor', version: '1.0' }
+      { id: 'a1', name: 'Ryan’s editor', version: '1.0', where: 'sketchpad' }
     )
   })
 

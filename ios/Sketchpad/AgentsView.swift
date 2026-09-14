@@ -33,7 +33,7 @@ struct AgentsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .confirmationDialog(
-                "Disconnect \(confirming?.name ?? "")?",
+                "Disconnect \(confirming?.label ?? "")?",
                 isPresented: .init(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
                 titleVisibility: .visible
             ) {
@@ -54,7 +54,7 @@ struct AgentsView: View {
                 .fill(agent.waiting ? Color(Settings.agentColor) : Color.secondary.opacity(0.35))
                 .frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 2) {
-                Text(agent.name).font(.body)
+                Text(agent.label).font(.body)
                 Text(agent.waiting ? "waiting for a page" : "connected")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -63,7 +63,7 @@ struct AgentsView: View {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Disconnect \(agent.name)")
+            .accessibilityLabel("Disconnect \(agent.label)")
         }
         .padding(.vertical, 2)
     }

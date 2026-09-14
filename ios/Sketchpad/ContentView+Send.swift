@@ -20,7 +20,7 @@ extension ContentView {
             store.addTurn(t, png: out.png)
             var b = store.current; b.sentStrokeCount = drawing.strokes.count; store.current = b
             if let agent {
-                showFlash(agent.waiting ? "Sent to \(agent.name)" : "Waiting for \(agent.name) to pick it up")
+                showFlash(agent.waiting ? "Sent to \(agent.label)" : "Waiting for \(agent.label) to pick it up")
             } else {
                 showFlash(conn.agentReady ? "Sent to agent" : "Sent · no agent listening yet")
             }

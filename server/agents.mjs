@@ -10,6 +10,10 @@
 // reaching this far has already presented the machine's token.
 
 /// Forgotten after this long without a word, so a list of agents is a list of live ones.
+///
+/// The wrapper says hello once a minute precisely so that "no word" means gone rather than merely
+/// idle — a client in the middle of a conversation can call nothing for a long time, and it used to
+/// vanish from the iPad while still connected. Five missed hellos is the margin.
 export const STALE_MS = 5 * 60 * 1000
 
 export function createAgents({ broadcast = () => {}, now = () => Date.now() } = {}) {
@@ -21,14 +25,15 @@ export function createAgents({ broadcast = () => {}, now = () => Date.now() } = 
   /// Record that this agent just did something. Returns its record, or null if there is nothing to
   /// record — no identity offered — or if it has been shut out.
   function seen(info) {
-    const { id, name, version } = info ?? {}
+    const { id, name, version, where } = info ?? {}
     if (!id) return null
     if (blocked.has(id)) return null
 
     const existing = agents.get(id)
-    const agent = existing ?? { id, name: name || 'an agent', version: version || '', firstSeen: now(), waiting: false }
+    const agent = existing ?? { id, name: name || 'an agent', version: version || '', where: where || '', firstSeen: now(), waiting: false }
     agent.name = name || agent.name
     agent.version = version || agent.version
+    agent.where = where || agent.where
     agent.lastSeen = now()
     agents.set(id, agent)
     if (!existing) publish()
@@ -68,7 +73,7 @@ export function createAgents({ broadcast = () => {}, now = () => Date.now() } = 
     prune()
     return [...agents.values()]
       .sort((a, b) => a.firstSeen - b.firstSeen)
-      .map(({ id, name, version, waiting, firstSeen, lastSeen }) => ({ id, name, version, waiting, firstSeen, lastSeen }))
+      .map(({ id, name, version, where, waiting, firstSeen, lastSeen }) => ({ id, name, version, where, waiting, firstSeen, lastSeen }))
   }
 
   return {
@@ -92,6 +97,9 @@ export function agentFromHeaders(headers = {}) {
   return {
     id: String(id).slice(0, 64),
     name: decode(headers['x-sketchpad-agent-name']).slice(0, 60),
-    version: decode(headers['x-sketchpad-agent-version']).slice(0, 30)
+    version: decode(headers['x-sketchpad-agent-version']).slice(0, 30),
+    // Where the client was working when it started us. Two sessions of the same editor are otherwise
+    // indistinguishable on the iPad, which is the case you most need to tell apart.
+    where: decode(headers['x-sketchpad-agent-where']).slice(0, 40)
   }
 }

@@ -11,7 +11,7 @@
 
 import { spawn } from 'node:child_process'
 import { openSync, mkdirSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -82,7 +82,10 @@ const agentHeaders = () => {
   return {
     'x-sketchpad-agent-id': AGENT_ID,
     'x-sketchpad-agent-name': encodeURIComponent(client?.name ?? 'an agent'),
-    'x-sketchpad-agent-version': encodeURIComponent(client?.version ?? '')
+    'x-sketchpad-agent-version': encodeURIComponent(client?.version ?? ''),
+    // The directory the client was working in — for an editor, the project. Two windows of the same
+    // editor look identical without it.
+    'x-sketchpad-agent-where': encodeURIComponent(basename(process.cwd()))
   }
 }
 
@@ -153,4 +156,16 @@ server.setRequestHandler(CallToolRequestSchema, async req => {
 
 await ensureServer()
 await server.connect(new StdioServerTransport())
+
+// Say we are still here, every so often.
+//
+// The shared server only hears from an agent when the agent calls a tool, and a client sitting in a
+// conversation calls nothing for long stretches. Without this it looks like it left, and the list of
+// agents on the iPad empties itself while they are all still connected. A wrapper that really has
+// gone stops sending these, and drops off the list on its own.
+const heartbeat = setInterval(() => {
+  fetchLocal(`${BASE}/health`, { headers: { ...AUTH, ...agentHeaders() } }).catch(() => {})
+}, 60_000)
+heartbeat.unref()
+
 log('ready')

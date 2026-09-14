@@ -280,7 +280,7 @@ struct ContentView: View {
             let listening = conn.agents.filter(\.waiting)
             switch listening.count {
             case 0: return conn.agentListening ? "agent listening" : "nobody listening"
-            case 1: return "\(listening[0].name) listening"
+            case 1: return "\(listening[0].label) listening"
             default: return "\(listening.count) agents listening"
             }
         case .connecting: return "connecting…"
@@ -341,7 +341,7 @@ struct ContentView: View {
                     Divider()
                     ForEach(conn.agents) { agent in
                         Button { Task { await sendTurn(to: agent) } } label: {
-                            Label(agent.waiting ? agent.name : "\(agent.name) (not listening)",
+                            Label(agent.waiting ? agent.label : "\(agent.label) (not listening)",
                                   systemImage: agent.waiting ? "antenna.radiowaves.left.and.right" : "moon.zzz")
                         }
                     }
