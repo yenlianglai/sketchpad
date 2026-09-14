@@ -33,6 +33,12 @@ struct ContentView: View {
     var newStrokeCount: Int { max(0, drawing.strokes.count - store.current.sentStrokeCount) }
     /// While the pen is down the floating chrome fades. The rail and drawer never move: they sit at
     /// the edge, they are not in the way, and anything that slides off-screen can strand you.
+    /// Drawing dims the controls; it does not take them away.
+    ///
+    /// They used to disappear outright, and getting them back depended on a pen-up that can be
+    /// missed — a pinch that starts as a stroke, a Pencil tap landing on a button. Every time that
+    /// went wrong it looked like the app had lost its toolbar. Dimmed and inert gets them out of the
+    /// way just as well, and there is nothing to recover from.
     var chromeHidden: Bool { canvasController.isDrawing }
     var rightInset: CGFloat { railWidth + (showDrawer ? drawerWidth : 0) }
 
@@ -43,7 +49,10 @@ struct ContentView: View {
             sendButton
             replyCards
         }
-        .opacity(chromeHidden ? 0 : 1)
+        .opacity(chromeHidden ? 0.2 : 1)
+        // Inert while drawing, so a resting hand cannot press Send — which is the reason they were
+        // being hidden in the first place.
+        .allowsHitTesting(!chromeHidden)
     }
 
     @ViewBuilder var connectionCard: some View {
@@ -176,7 +185,8 @@ struct ContentView: View {
             if showDrawer {
                 Drawer(tab: $tab, actions: drawerActions).frame(width: drawerWidth).transition(.move(edge: .trailing))
             }
-            rail.opacity(chromeHidden && !showDrawer ? 0.45 : 1)
+            rail.opacity(chromeHidden && !showDrawer ? 0.2 : 1)
+                .allowsHitTesting(!(chromeHidden && !showDrawer))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
     }
