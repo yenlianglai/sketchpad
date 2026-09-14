@@ -36,7 +36,10 @@ export function createRoutes({ state, hub, devices, agents, authorize, pairing, 
       try { body = JSON.parse((await readBody(req)).toString('utf8')) } catch { return send(res, 400, 'invalid json') }
     }
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    const server = buildMcpServer({ state, broadcast: hub.broadcast, clientCount: hub.clientCount, devices, agents, agent: agents.seen(agentFromHeaders(req.headers)), log })
+    const server = buildMcpServer({
+      state, broadcast: hub.broadcast, clientCount: hub.clientCount, quietFor: hub.quietFor,
+      devices, agents, agent: agents.seen(agentFromHeaders(req.headers)), log
+    })
     res.on('close', () => { transport.close(); server.close() })
     await server.connect(transport)
     await transport.handleRequest(req, res, body)
@@ -130,7 +133,8 @@ export function createRoutes({ state, hub, devices, agents, authorize, pairing, 
         return json(res, {
           ok: true, clients: hub.clientCount(),
           pending_turns: state.pending(), agent_listening: state.isListening(),
-          agents_waiting: state.waiting()
+          agents_waiting: state.waiting(),
+          ipad_quiet_for_seconds: hub.quietFor() == null ? null : Math.round(hub.quietFor() / 1000)
         })
       }
 

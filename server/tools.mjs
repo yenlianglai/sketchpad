@@ -94,7 +94,7 @@ const summariseTurn = t =>
   `note=${JSON.stringify(t.text || '')}  replies=${t.replies?.length ?? 0}` +
   (t.replies?.length ? ' (' + t.replies.map(r => r.kind || 'text').join(', ') + ')' : '')
 
-export function buildMcpServer({ state, broadcast, clientCount, devices, agents = null, agent = null, log = () => {} }) {
+export function buildMcpServer({ state, broadcast, clientCount, quietFor = () => null, devices, agents = null, agent = null, log = () => {} }) {
   const server = new Server({ name: 'sketchpad', version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS })
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
@@ -158,6 +158,9 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, agents 
       return text(JSON.stringify({
         ipad_connected: clientCount() > 0,
         clients: clientCount(),
+        // How long ago the iPad last proved it was there. "Connected" is only ever a statement
+        // about the last time something was heard, so say when that was.
+        ipad_quiet_for_seconds: quietFor() == null ? null : Math.round(quietFor() / 1000),
         pending_turns: state.pending(),
         agent_listening: state.isListening(),
         agents_waiting: state.waiting(),
