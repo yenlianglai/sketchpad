@@ -173,6 +173,12 @@ describe('state', () => {
       assert.throws(() => state.publishFile('outputs/diagrams/flow.png'), /must be absolute/)
     })
 
+    test('a path this server cannot see says what to do instead', () => {
+      // An agent in a container guessed at an absolute prefix and handed over /workspace/… . The
+      // file was real; the root was not. Telling it the file is missing is half an answer.
+      assert.throws(() => state.publishFile('/workspace/outputs/diagram.png'), /send image_data instead/)
+    })
+
     test('a type the iPad cannot show is refused', () => {
       const src = join(dir, 'notes.txt')
       writeFileSync(src, 'hello')
@@ -226,6 +232,29 @@ describe('state', () => {
       state.pushTurn(page('two'))
       const ids = (await Promise.all(waits)).filter(Boolean).map(t => t.turnId).sort()
       assert.deepEqual(ids, ['one', 'two'])
+    })
+  })
+
+  describe('handing over the bytes instead of a path', () => {
+    test('works with no shared filesystem at all', () => {
+      const png = readFileSync(join(process.cwd(), 'test/fixtures/page.png')).toString('base64')
+      const published = state.publishBytes(png, 'diagram')
+      assert.match(published.url, /^\/files\/\d+-diagram\.png$/)
+      assert.ok(existsSync(join(dir, 'files', published.url.replace('/files/', ''))))
+    })
+
+    test('the type comes from the bytes, not from what was claimed', () => {
+      // Otherwise an agent's guess at an extension decides what gets written here.
+      const png = readFileSync(join(process.cwd(), 'test/fixtures/page.png')).toString('base64')
+      assert.match(state.publishBytes(png, 'thing.pdf').url, /\.png$/)
+    })
+
+    test('something that is not an image is refused', () => {
+      assert.throws(() => state.publishBytes(Buffer.from('hello there').toString('base64')), /not an image/)
+    })
+
+    test('and so is nothing at all', () => {
+      assert.throws(() => state.publishBytes(''), /empty or not valid base64/)
     })
   })
 

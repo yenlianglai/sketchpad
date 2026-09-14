@@ -49,7 +49,8 @@ export const TOOLS = [
       properties: {
         text: { type: 'string', description: 'One or two sentences.' },
         svg: { type: 'string', description: 'Stroke-only SVG in the pixel space of the turn_id image.' },
-        image_path: { type: 'string', description: 'Absolute path of a rendered image (png/jpg/svg/webp/pdf). Must be absolute — this server has its own working directory, not yours.' },
+        image_path: { type: 'string', description: 'Absolute path of a rendered image (png/jpg/svg/webp/pdf) on THIS machine. Only use it when you are certain of the absolute path and that this server can read it — if you are in a container or sandbox, or only have a path relative to your own project, send image_data instead rather than guessing at a prefix.' },
+        image_data: { type: 'string', description: 'The image itself, base64. Works from anywhere: no shared filesystem, no absolute path to work out. Prefer this when a tool gave you a relative path or you rendered the image somewhere isolated.' },
         kind: { type: 'string', enum: ['sketch', 'mermaid', 'drawio', 'image', 'other'], description: 'What image_path is. Shown as a label on the iPad.' },
         place_as_layer: { type: 'boolean', description: 'Suggest putting it straight onto the canvas. With image_path this places the image; on its own it places your text as a note they can move, trace and draw over. The person still decides.' },
         turn_id: { type: 'string', description: 'The turn this replies to. Required for svg coordinates to land correctly.' }
@@ -127,7 +128,9 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, agents 
       if (a.svg) {
         files.push({ url: 'data:image/svg+xml;base64,' + Buffer.from(String(a.svg)).toString('base64'), name: 'drawing.svg', kind: 'sketch' })
       }
-      if (a.image_path) {
+      if (a.image_data) {
+        files.push({ ...state.publishBytes(a.image_data, a.image_path || a.kind || 'image'), kind: a.kind || 'image', layer: a.place_as_layer === true })
+      } else if (a.image_path) {
         files.push({ ...state.publishFile(String(a.image_path)), kind: a.kind || 'image', layer: a.place_as_layer === true })
       } else if (a.place_as_layer === true && String(a.text ?? '').trim()) {
         // Text for the canvas rather than the panel. The iPad lays it out, because it knows the
