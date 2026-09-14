@@ -17,6 +17,7 @@ struct AgentItem: Identifiable, Codable, Equatable {
     var id = UUID()
     var kind: String            // sketch (svg → strokes) | mermaid | drawio | image | other
     var svg: String?            // for sketch: the raw svg
+    var note: String?           // for note: the words, kept so they can be re-laid-out or copied
     var file: String?           // for images: file name inside Documents/agent (downloaded)
     var remoteURL: String?      // where it came from, for retry
     var placedAsLayer = false

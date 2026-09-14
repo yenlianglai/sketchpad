@@ -47,7 +47,7 @@ export const TOOLS = [
         svg: { type: 'string', description: 'Stroke-only SVG in the pixel space of the turn_id image.' },
         image_path: { type: 'string', description: 'Absolute path of a rendered image (png/jpg/svg/webp/pdf). Must be absolute — this server has its own working directory, not yours.' },
         kind: { type: 'string', enum: ['sketch', 'mermaid', 'drawio', 'image', 'other'], description: 'What image_path is. Shown as a label on the iPad.' },
-        place_as_layer: { type: 'boolean', description: 'Suggest putting it straight onto the canvas. The person still decides.' },
+        place_as_layer: { type: 'boolean', description: 'Suggest putting it straight onto the canvas. With image_path this places the image; on its own it places your text as a note they can move, trace and draw over. The person still decides.' },
         turn_id: { type: 'string', description: 'The turn this replies to. Required for svg coordinates to land correctly.' }
       },
       required: ['text']
@@ -154,6 +154,11 @@ export function buildMcpServer({ state, broadcast, clientCount, devices, agents 
       }
       if (a.image_path) {
         files.push({ ...state.publishFile(String(a.image_path)), kind: a.kind || 'image', layer: a.place_as_layer === true })
+      } else if (a.place_as_layer === true && String(a.text ?? '').trim()) {
+        // Text for the canvas rather than the panel. The iPad lays it out, because it knows the
+        // page it is going onto — and it keeps the words, so they stay selectable and legible at
+        // any zoom rather than being baked into a picture here.
+        files.push({ kind: 'note', name: 'note', note: String(a.text), layer: true })
       }
       const reply = {
         type: 'reply', id: randomUUID(), text: String(a.text ?? ''), files,

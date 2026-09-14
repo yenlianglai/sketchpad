@@ -17,7 +17,7 @@ struct Agent: Identifiable, Equatable {
 }
 
 /// A file the agent handed back with a reply.
-struct ReplyFile { var kind: String; var name: String; var svg: String?; var remoteURL: URL?; var layer: Bool }
+struct ReplyFile { var kind: String; var name: String; var svg: String?; var note: String?; var remoteURL: URL?; var layer: Bool }
 struct Reply { var id: String; var ts: Double; var text: String; var turnId: String?; var files: [ReplyFile] }
 
 /// Finds the Mac server (Bonjour `_sketchpad._tcp`, or a manual host) and talks to it:
@@ -308,15 +308,21 @@ final class ServerConnection: NSObject, ObservableObject {
     private func parseReply(_ m: [String: Any]) -> Reply {
         var files: [ReplyFile] = []
         for f in (m["files"] as? [[String: Any]]) ?? [] {
+            // A note carries its words rather than a url: the words are laid out here, on the page
+            // they are going onto.
+            if f["kind"] as? String == "note", let note = f["note"] as? String {
+                files.append(ReplyFile(kind: "note", name: "note", svg: nil, note: note, remoteURL: nil, layer: true))
+                continue
+            }
             guard let url = f["url"] as? String else { continue }
             let kind = f["kind"] as? String ?? "image"
             let name = f["name"] as? String ?? "file"
             if url.hasPrefix("data:image/svg+xml;base64,"), let d = Data(base64Encoded: String(url.dropFirst("data:image/svg+xml;base64,".count))) {
-                files.append(ReplyFile(kind: "sketch", name: name, svg: String(data: d, encoding: .utf8), remoteURL: nil, layer: false))
+                files.append(ReplyFile(kind: "sketch", name: name, svg: String(data: d, encoding: .utf8), note: nil, remoteURL: nil, layer: false))
             } else if url.hasPrefix("/"), let base = baseURL {
                 // Stored plain: this is persisted with the turn, and a saved token would outlive
                 // the pairing it came from. download(_:to:) adds the header when it fetches.
-                files.append(ReplyFile(kind: kind, name: name, svg: nil, remoteURL: base.appendingPathComponent(url), layer: f["layer"] as? Bool ?? false))
+                files.append(ReplyFile(kind: kind, name: name, svg: nil, note: nil, remoteURL: base.appendingPathComponent(url), layer: f["layer"] as? Bool ?? false))
             }
         }
         return Reply(id: m["id"] as? String ?? UUID().uuidString, ts: (m["ts"] as? Double ?? 0) / 1000,

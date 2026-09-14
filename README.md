@@ -86,8 +86,8 @@ which marks are new.
 
 - **Strokes** arrive as real pen strokes, drawn one at a time over your sketch. Erase them, lasso
   them, draw over them.
-- **Layers** — a rendered diagram or a generated image — sit under your strokes. Long-press to grab,
-  drag to move, pinch to resize, lock to trace.
+- **Layers** — a rendered diagram, a generated image, or a note the agent wrote — sit under your
+  strokes. Long-press to grab, drag to move, pinch to resize, lock to trace.
 - **Sheets and turns.** Every send is saved with its strokes, so you can reopen one, export it,
   branch it into a new sheet, or undo just what the agent added that turn.
 - **The page keeps going.** It grows downwards and to the right as you fill it, so there is no

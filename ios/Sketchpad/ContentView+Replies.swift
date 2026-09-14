@@ -46,11 +46,16 @@ extension ContentView {
         }
 
         for f in r.files {
-            let item = AgentItem(kind: f.kind, svg: f.svg, file: nil, remoteURL: f.remoteURL?.absoluteString, wantsLayer: f.layer)
+            let item = AgentItem(kind: f.kind, svg: f.svg, note: f.note, file: nil, remoteURL: f.remoteURL?.absoluteString, wantsLayer: f.layer)
             store.update(turnId) { $0.agentItems.append(item) }
             let cardText = textForCard; textForCard = ""
 
-            if f.kind == "sketch" {
+            if f.kind == "note", let words = f.note {
+                // Laid out here, at a width that suits the page rather than one chosen on the
+                // computer. The words stay on the item so it can be drawn again at another size.
+                let preview = NoteRenderer.image(for: words, width: noteWidth)
+                replyQueue.append(PendingReply(turnId: turnId, itemId: item.id, kind: "note", text: cardText, preview: preview, suggested: true))
+            } else if f.kind == "sketch" {
                 let preview = f.svg.flatMap { SVGStrokes.preview(svg: $0, maxSize: CGSize(width: 276, height: 150)) }
                 replyQueue.append(PendingReply(turnId: turnId, itemId: item.id, kind: "sketch", text: cardText, preview: preview, suggested: true))
             } else if let url = f.remoteURL {
@@ -120,23 +125,54 @@ extension ContentView {
         }
     }
 
-    /// Put an agent image onto the canvas as a layer, sized to fit the visible area, below the drawing when possible.
-    func placeLayer(turn: Turn, item: AgentItem, at point: CGPoint? = nil) {
-        guard let file = item.file, let img = store.image(named: file, in: store.agentDir) else { showFlash("Image not downloaded yet"); return }
-        // The canvas runs under the rail/drawer; only the uncovered part counts as visible.
+    /// How wide a note should be laid out, in canvas points: comfortable to read, and never wider
+    /// than the room left on screen.
+    var noteWidth: CGFloat {
         var visible = canvasController.visibleCanvasRect
         visible.size.width = max(200, visible.width - rightInset / canvasController.zoom)
-        let maxW = visible.width * 0.6, maxH = visible.height * 0.6
-        var w = img.size.width / 2, h = img.size.height / 2
-        let k = min(1, min(maxW / w, maxH / h)); w *= k; h *= k
-        var origin = CGPoint(x: visible.midX - w / 2, y: visible.midY - h / 2)
-        if let point { origin = CGPoint(x: point.x - w / 2, y: point.y - h / 2) }
-        else if !drawing.strokes.isEmpty, drawing.bounds.maxY + 40 + h < visible.maxY { origin = CGPoint(x: max(visible.minX + 20, drawing.bounds.minX), y: drawing.bounds.maxY + 40) }
-        guard let layer = store.addLayer(fromAgentFile: file, kind: item.kind, turnId: turn.id, frame: CGRect(origin: origin, size: CGSize(width: w, height: h))) else { return }
+        return min(560, max(260, visible.width * 0.45))
+    }
+
+    /// Put something the agent handed over onto the canvas as a layer.
+    ///
+    /// An image arrives as a file it downloaded; a note arrives as words, and is laid out here at a
+    /// width that suits this page. Either way it lands as a layer: movable, resizable, something to
+    /// draw over — which is the point of putting it on the canvas rather than in the panel.
+    func placeLayer(turn: Turn, item: AgentItem, at point: CGPoint? = nil) {
+        let placed: Layer?
+        if item.kind == "note", let words = item.note {
+            guard let rendered = NoteRenderer.image(for: words, width: noteWidth) else { return }
+            placed = store.addLayer(image: rendered, kind: "note", frame: frame(for: rendered, at: point))
+        } else {
+            guard let file = item.file, let downloaded = store.image(named: file, in: store.agentDir) else {
+                showFlash("Image not downloaded yet"); return
+            }
+            placed = store.addLayer(fromAgentFile: file, kind: item.kind, turnId: turn.id, frame: frame(for: downloaded, at: point))
+        }
+        guard let layer = placed else { return }
         store.update(turn.id) { t in if let i = t.agentItems.firstIndex(where: { $0.id == item.id }) { t.agentItems[i].placedAsLayer = true } }
         setLayerMode(true)
         selectedLayerID = layer.id
         showFlash("\(item.kind) placed — drag to move, pinch or corners to resize, tap Layers · done to draw")
+    }
+
+    /// Where a thing of this size should land: under what you have drawn when there is room for it,
+    /// otherwise in the middle of what you can see. The canvas runs under the rail and the drawer,
+    /// so only the uncovered part counts as visible.
+    private func frame(for image: UIImage, at point: CGPoint?) -> CGRect {
+        var visible = canvasController.visibleCanvasRect
+        visible.size.width = max(200, visible.width - rightInset / canvasController.zoom)
+        let maxW = visible.width * 0.6, maxH = visible.height * 0.6
+        var w = image.size.width / 2, h = image.size.height / 2
+        let k = min(1, min(maxW / w, maxH / h)); w *= k; h *= k
+
+        var origin = CGPoint(x: visible.midX - w / 2, y: visible.midY - h / 2)
+        if let point {
+            origin = CGPoint(x: point.x - w / 2, y: point.y - h / 2)
+        } else if !drawing.strokes.isEmpty, drawing.bounds.maxY + 40 + h < visible.maxY {
+            origin = CGPoint(x: max(visible.minX + 20, drawing.bounds.minX), y: drawing.bounds.maxY + 40)
+        }
+        return CGRect(origin: origin, size: CGSize(width: w, height: h))
     }
 
     func branch(_ t: Turn) {
