@@ -90,6 +90,8 @@ which marks are new.
   drag to move, pinch to resize, lock to trace.
 - **Sheets and turns.** Every send is saved with its strokes, so you can reopen one, export it,
   branch it into a new sheet, or undo just what the agent added that turn.
+- **The page keeps going.** It grows downwards and to the right as you fill it, so there is no
+  bottom to run into. What gets sent is whatever you drew, not the whole page.
 
 <p align="center">
   <img src="docs/layers.png" width="560" alt="A rendered diagram sitting on the canvas as a layer beneath the sketch">

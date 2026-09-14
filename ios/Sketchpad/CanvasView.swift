@@ -106,7 +106,11 @@ struct CanvasView: UIViewRepresentable {
     /// An image dropped onto the canvas, at that canvas point.
     var onDropImage: ((UIImage, CGPoint) -> Void)?
 
+    /// Where a fresh page starts. It grows from here as you approach an edge — see `growIfNeeded`.
     static let contentSize = CGSize(width: 4000, height: 6000)
+    /// How much room to keep beyond whatever has been drawn, and how much to add when it runs out.
+    /// A screenful and a half, so the edge is never somewhere you can reach mid-sentence.
+    private static let headroom: CGFloat = 2000
 
     func makeUIView(context: Context) -> UIView {
         let container = UIView()
@@ -126,7 +130,8 @@ struct CanvasView: UIViewRepresentable {
         canvas.overrideUserInterfaceStyle = .light
         canvas.alwaysBounceVertical = true
         canvas.alwaysBounceHorizontal = true
-        canvas.minimumZoomScale = 0.5
+        // Low enough to take in a page that has grown several screens tall.
+        canvas.minimumZoomScale = 0.1
         canvas.maximumZoomScale = 4
         canvas.contentSize = Self.contentSize
         canvas.drawingPolicy = pencilOnly ? .pencilOnly : .anyInput
@@ -199,6 +204,9 @@ struct CanvasView: UIViewRepresentable {
         if host.paper != paper { host.paper = paper }
         if host.layers != layers { host.layers = layers }
         context.coordinator.parent = self
+        // Also on the way in: a page that grew past the default before it was saved would otherwise
+        // come back with everything below the old edge out of reach.
+        context.coordinator.growIfNeeded()
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -293,7 +301,28 @@ struct CanvasView: UIViewRepresentable {
 
 
 
+        /// Grow the page down and to the right as the drawing approaches the edge.
+        ///
+        /// Only those two directions, deliberately. A scroll view has no negative coordinates, so
+        /// growing up or left would mean translating every stroke and every layer and then undoing
+        /// that with the content offset — which also shifts what every saved turn recorded. Writing
+        /// runs downwards, so this is the direction that is actually in the way.
+        func growIfNeeded() {
+            guard let canvas, let host else { return }
+            let content = parent.layers.reduce(canvas.drawing.bounds) { $0.union($1.frame) }
+            guard !content.isNull else { return }
+
+            let wanted = CGSize(
+                width: max(canvas.contentSize.width, content.maxX + CanvasView.headroom),
+                height: max(canvas.contentSize.height, content.maxY + CanvasView.headroom)
+            )
+            guard wanted != canvas.contentSize else { return }
+            canvas.contentSize = wanted
+            host.contentSize = wanted
+        }
+
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            growIfNeeded()
             updatingFromCanvas = true
             parent.drawing = canvasView.drawing
             parent.onStrokesChanged()
