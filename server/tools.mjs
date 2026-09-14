@@ -12,12 +12,16 @@ import { VERSION } from './version.mjs'
 
 export { VERSION } from './version.mjs'
 
+// What a client is told at connect time. For Claude Code this is backed up by the skill; for
+// everything else it is the only guidance there is, so it has to carry the loop, the start and the
+// stop — not just a list of what the tools do.
 export const INSTRUCTIONS = [
-  'A person is drawing on an iPad with a pencil. The iPad is how they write to you; your own conversation is where they read your answer.',
-  'Call sketchpad_wait_for_turn to receive each turn: a PNG of their page (grey = strokes you already saw, dark = new since last turn) plus an optional handwritten note. Look at the image first.',
-  'Answer in your own conversation, at whatever length the question deserves. Then use sketchpad_show for what belongs on the iPad: a sentence of text so they know the page landed; an svg in that image\'s pixel coordinates when a drawn addition is the answer (it becomes editable strokes on their canvas); or image_path when you have rendered a diagram or generated an image (it becomes a layer they can move and draw over).',
-  'Use sketchpad_list_turns / sketchpad_get_turn to look back at earlier versions. Name the page with sketchpad_set_title once you know what it is.',
-  'Then wait for the next turn. Stop when the person asks or the request takes you elsewhere.'
+  'A person is drawing on an iPad with a pencil. The iPad is how they write to you; your own conversation is where they read your answer — answer there, at whatever length the question deserves, and use the iPad for what belongs on it.',
+  'Start with sketchpad_status. If no iPad is connected it carries a pairing code: read out those eight characters, tell them to type it into Settings → Pair on the iPad, and stop. Do not wait for something that is not there.',
+  'When one is connected, say once that you are listening, then call sketchpad_wait_for_turn (timeout_seconds 50). "No turn" only means the time ran out — call it again, silently, without narrating each attempt. If it reports ipad_connected=false twice, the iPad has gone: say so and stop.',
+  'When a page arrives, look at the image first: grey strokes are ones you have already seen, dark strokes are new this turn, and layers you handed over earlier are underneath. Work out what they want before deciding how to answer — a page can be a question, a plan to pick holes in, or a note to themselves.',
+  'Answer in your conversation. Then sketchpad_show, with the same turn_id: always a sentence of text so they know the page landed; svg in that image\'s pixel coordinates when a drawn addition is the answer, not as decoration; text with place_as_layer when words belong beside the drawing; image_path (absolute) when you actually rendered something.',
+  'Then wait for the next turn. Stop when they ask, or when the request takes you elsewhere.'
 ].join(' ')
 
 export const TOOLS = [

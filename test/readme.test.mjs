@@ -156,3 +156,24 @@ describe('what the iPad app asks permission for', () => {
     assert.ok(ignored.includes('ios/Sketchpad/Info.plist'))
   })
 })
+
+describe('what a client is told at connect time', () => {
+  // Claude Code has the skill to fall back on; every other client has only this string. It named
+  // three tools that had been removed, which is how Cursor would have been told to call them.
+  test('names only tools that exist', async () => {
+    const { INSTRUCTIONS, TOOLS } = await import('../server/tools.mjs')
+    const names = TOOLS.map(t => t.name)
+    for (const claimed of new Set([...INSTRUCTIONS.matchAll(/sketchpad_[a-z_]+/g)].map(m => m[0]))) {
+      assert.ok(names.includes(claimed), `instructions tell clients to call ${claimed}, which does not exist`)
+    }
+  })
+
+  test('carries the loop, not just a list of tools', async () => {
+    const { INSTRUCTIONS } = await import('../server/tools.mjs')
+    // A client without the skill has to learn where to start and when to give up from this alone.
+    assert.match(INSTRUCTIONS, /sketchpad_status/, 'must say to check status first')
+    assert.match(INSTRUCTIONS, /pairing code/i, 'must say what to do when nothing is connected')
+    assert.match(INSTRUCTIONS, /call it again/i, 'must say a timeout is not a failure')
+    assert.match(INSTRUCTIONS, /stop/i, 'must say when to stop')
+  })
+})
